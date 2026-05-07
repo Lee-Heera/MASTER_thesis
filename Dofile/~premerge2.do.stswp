@@ -1,0 +1,109 @@
+******************************************************
+* 연도별 대선 데이터 append (2012, 2017, 2022)
+******************************************************
+
+cd "/Users/ihuila/Desktop/data/master thesis/presidential election"
+
+* 연도 리스트
+local years 2012 2017 2022
+
+* 첫 연도는 use
+local base_year : word 1 of `years'
+use "`base_year'/merged_`base_year'_presidential.dta", clear
+
+* 이미 year 변수가 있으면 삭제
+capture confirm variable year
+if !_rc {
+    drop year
+}
+
+gen year = `base_year'
+
+* 나머지 연도 append
+local n : word count `years'
+forvalues i = 2/`n' {
+    local y : word `i' of `years'
+
+    append using "`y'/merged_`y'_presidential.dta"
+
+    * year 변수도 해당 연도로 채워줌
+    replace year = `y' if missing(year)
+}
+
+gen liberal = cond(missing(민주통합당), 0, 민주통합당) + cond(missing(더불어), 0, 더불어) 
+
+gen conserv = cond(missing(새누리당), 0, 새누리당) + cond(missing(자유한국당), 0, 자유한국당) + cond(missing(국민의힘), 0, 국민의힘) 
+
+gen new=liberal+conserv
+count if new<=100 
+
+drop new 민주통합당 더불어 새누리당 자유한국당 국민의힘 
+
+replace sigungu_nm = "미추홀구" if sido_nm=="인천광역시" & sigungu_nm=="남구" 
+replace sigungu_nm = "여주시" if sigungu_nm=="여주군" 
+
+drop if sigungu_nm=="청원군" 
+drop if sigungu_nm=="연기군" 
+
+save "premerge.dta", replace
+******************************************************
+*** 로봇데이터 머지하기 
+use "premerge.dta", clear 
+
+merge m:n year sido_nm sigungu_nm using "/Users/ihuila/Desktop/data/master thesis/Robot1.dta"
+
+br if _merge==2 
+tab year if _merge==2 // 대선연도 이외의 연도데이터들
+drop if _merge==2 
+
+gen new=liberal-conserv 
+
+drop _merge
+
+save "/Users/ihuila/Desktop/data/master thesis/prerobot.dta", replace  // 최종 분석에 쓸 데이터 
+*************************************************************
+** 통제변수 데이터 머지하기 
+use "/Users/ihuila/Desktop/data/master thesis/pop_variables_clean.dta", clear 
+
+merge m:n year sido_nm sigungu_nm using "/Users/ihuila/Desktop/data/master thesis/prerobot.dta"
+
+br if _merge==1 // 통제변수 데이터에만 있는 연도들 - 매칭안됨  
+tab year if _merge==1 
+drop if _merge==1 
+
+drop _merge 
+
+save "/Users/ihuila/Desktop/data/master thesis/prerobot.dta", replace 
+
+**********************통제변수 더추가 ****************** 
+use  "/Users/ihuila/Desktop/data/master thesis/prerobot.dta", clear
+
+merge m:n sido_nm sigungu_nm year using "/Users/ihuila/Desktop/data/master thesis/control/spend_var.dta"
+
+br if _merge==1 // 1. 제주도 (drop) 2. 세종2012 (drop)
+br if _merge==2 // 대선이외의 연도 데이터 
+
+/*
+drop if _merge==1 
+drop if _merge==2 & year<=2010 
+drop if _merge==2 & year>=2013&year<=2015
+drop if _merge==2 & year>=2018&year<=2020 
+drop if _merge==2 & year==2023
+// 통제변수때문에 대선 전연도는 남겨놔야 함 
+*/
+
+drop if _merge!=3 
+
+drop _merge
+
+/*
+*** 단위 조정: 천원단위로 맞춰야 함 
+*** 지방세액 빼고, 다 "원 단위"임 
+*** 단위 바꿀 변수 자치단체예산규모 / 자체수입 / 교부액 / 세출결산액
+
+foreach var in 자치단체예산규모 교부액 세출결산액  {
+	gen per_capita_`var' = `var' / 인구수 / 1000
+    label variable per`var' "`var' per capita (1,000 KRW)"
+}
+*/
+save "/Users/ihuila/Desktop/data/master thesis/prerobot2.dta", replace 

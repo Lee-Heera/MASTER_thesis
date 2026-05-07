@@ -1,0 +1,9 @@
+/*
+!Dofile/
+!Output/
+!Rscript/
+!README.md
+!.gitignore
+Dofile/*.log
+Dofile/*.smcl
+.DS_Store

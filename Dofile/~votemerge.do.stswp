@@ -1,0 +1,115 @@
+***** 2012년 대선 - "투표율데이터" (득표율아님)
+clear
+cd "/Users/ihuila/Desktop/data/master thesis/raw/presidential election2/2012"
+
+// 파일 이름과 시도명 매칭 리스트
+local files 2012busan 2012CHB 2012CHN 2012daegu 2012daejeon 2012GB 2012GN 2012GW 2012gwangju 2012gyeonggi 2012incheon 2012JB 2012JJ 2012JN 2012seoul 2012SJ 2012ulsan
+local names 부산광역시 충청북도 충청남도 대구광역시 대전광역시 경상북도 경상남도 강원도 광주광역시 경기도 인천광역시 전라북도 제주특별자치도 전라남도 서울특별시 세종특별자치시 울산광역시
+
+// 1단계: 엑셀 -> dta + sido_nm 생성
+local i = 1
+foreach f of local files {
+    import excel "`f'.xlsx", firstrow clear
+
+    // sido_nm 변수 생성
+    local region : word `i' of `names'
+    gen sido_nm = "`region'"
+	drop in 1/3 
+	drop in L 
+
+    save "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote/`f'.dta", replace
+    local ++i
+}
+
+// 2단계: append로 하나로 합치기
+clear
+cd "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote"
+
+use 2012busan.dta, clear
+
+foreach f of local files {
+    if "`f'" != "2012busan" {
+        append using `f'.dta
+    }
+}
+
+// 결과 저장
+save "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote/2012merge.dta", replace
+
+***** 2017년 대선 - "투표율데이터" (득표율아님)
+clear
+cd "/Users/ihuila/Desktop/data/master thesis/raw/presidential election2/2017"
+
+// 파일 이름과 시도명 매칭 리스트
+local files 2017busan 2017CHB 2017CHN 2017daegu 2017daejeon 2017GB 2017GN 2017GW 2017gwangju 2017gyeonggi 2017incheon 2017JB 2017JJ 2017JN 2017seoul 2017SJ 2017ulsan
+local names 부산광역시 충청북도 충청남도 대구광역시 대전광역시 경상북도 경상남도 강원도 광주광역시 경기도 인천광역시 전라북도 제주특별자치도 전라남도 서울특별시 세종특별자치시 울산광역시
+
+// 1단계: 엑셀 -> dta + sido_nm 생성
+local i = 1
+foreach f of local files {
+    import excel "`f'.xlsx", firstrow clear
+
+    // sido_nm 변수 생성
+    local region : word `i' of `names'
+    gen sido_nm = "`region'"
+	drop in 1/3 
+	drop in L 
+
+    save "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote/`f'.dta", replace
+    local ++i
+}
+
+// 2단계: append로 하나로 합치기
+clear
+cd "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote"
+
+use 2017busan.dta, clear
+
+foreach f of local files {
+    if "`f'" != "2017busan" {
+        append using `f'.dta
+    }
+}
+
+// 결과 저장
+save "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote/2017merge.dta", replace
+
+***** 2022년 대선 - "투표율데이터" (득표율아님)
+clear
+cd "/Users/ihuila/Desktop/data/master thesis/raw/presidential election2/2022"
+
+// 파일 이름과 시도명 매칭 리스트
+local files 2022busan 2022CHB 2022CHN 2022daegu 2022daejeon 2022GB 2022GN 2022GW 2022gwangju 2022gyeonggi 2022incheon 2022JB 2022JJ 2022JN 2022seoul 2022SJ 2022ulsan
+local names 부산광역시 충청북도 충청남도 대구광역시 대전광역시 경상북도 경상남도 강원도 광주광역시 경기도 인천광역시 전라북도 제주특별자치도 전라남도 서울특별시 세종특별자치시 울산광역시
+
+// 1단계: 엑셀 -> dta + sido_nm 생성
+local i = 1
+foreach f of local files {
+    import excel "`f'.xlsx", firstrow clear
+
+    // sido_nm 변수 생성
+    local region : word `i' of `names'
+    gen sido_nm = "`region'"
+	drop in 1/3 
+	drop in L 
+
+    save "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote/`f'.dta", replace
+    local ++i
+}
+
+// 2단계: append로 하나로 합치기
+clear
+cd "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote"
+
+use 2022busan.dta, clear
+
+foreach f of local files {
+    if "`f'" != "2022busan" {
+        append using `f'.dta
+    }
+}
+
+// 결과 저장
+save "/Users/ihuila/Desktop/data/master thesis/raw/afterclean/afterdata/vote/2022merge.dta", replace
+
+*******************************************************************
