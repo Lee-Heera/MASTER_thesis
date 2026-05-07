@@ -7,3 +7,10 @@
 Dofile/*.log
 Dofile/*.smcl
 .DS_Store
+
+# Stata temporary files
+*.log
+*.smcl
+*.stswp
+~*.do.stswp
+~*.stswp
