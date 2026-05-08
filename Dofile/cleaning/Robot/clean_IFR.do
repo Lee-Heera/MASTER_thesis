@@ -1,10 +1,10 @@
-*********************************************************************
-* Robot and automation project 
+**********************************************************************  
+* Robot and automation
 * Singapore Employment Statistics clean do-file
 **********************************************************************
 clear all
 
-	global main "/Users/ihuila/Desktop/data/master thesis"
+	global main "/Users/ihuila/Research/MASTER_thesis"
 	global data "${main}/Data cleaned"
 	global interim "${main}/Data interim"
 	global final "${main}/Data final"
@@ -15,7 +15,7 @@ clear all
 	global oarlr "${main}/Data raw/OARLR"
 	global singapore "${main}/Data raw/Singapore"
 	*/
-
+	
 ********************************************************************** 
 use "$prof_raw/IFR2023_industry.dta" 
 
@@ -23,16 +23,25 @@ merge m:1 industry using "$prof_raw/RobotInd.dta"
 
 drop _merge 
 
-save "$interim/IFR2003_indcode.dta" ,replace 
+//save "$interim/IFR/IFR2003_indcode.dta" ,replace 
 
+//
 compress 
+destring newindcode, replace 
+drop delivered // operatinoal stock만 사용 
 
 // 필터링 
-keep if year > =1995 
+keep if year >=1995 
 keep if country == "Singapore" | country == "Rep. of Korea"
-drop if newindcode==100 
-keep if newindcode!=. 
 
+tab newindcode, m  // 100=all industries, 200 = metal, unspecified, 300 = unspecified 
+
+drop if newindcode==100 | newindcode == 200 
+drop if newindcode==. 
+
+bysort year country: egen tot_opstock = total(op_stock)
+
+/*
 ********************************************************************** 
 * wood & furniture 통합
 ********************************************************************** 
@@ -40,267 +49,144 @@ replace newindcode = 118 if newindcode == 119
 replace newind = "other manufacturing" if newindcode == 118
 
 collapse (sum) op_stock delivered, by(year country newindcode newind)
+*/
+
+tab newindcode // 각산업별로 동일 관측치 개수인지 확인하기 
+tab year 
+tab year country // unspecified 포함 20개씩 
 ********************************************************************** 
-* STEP 1: 산업1 (원래값)
+* STEP 3: total unclassified (300번만)
 ********************************************************************** 
-gen opdeli = op_stock + delivered
+gen is_unclas = (newindcode == 300)
 
-rename op_stock industry_opstock
-rename delivered industry_delivered
-rename opdeli industry_opdeli 
-
-label variable industry_opstock "original op_stock"
-label variable industry_delivered "original delivered"
-label variable industry_opdeli  "original op_stock + delivered"
-
+* unclassified 총합 (year-country 단위)
+bysort year country: egen unclas_opstock = total(op_stock * is_unclas)
+label variable unclas_opstock "Total unclassified op_stock (300번)"
 ********************************************************************** 
-* STEP 2: Total (산업1 + unclassified)
+* STEP 4: total classified (unclassified 제외한 나머지)
 ********************************************************************** 
-bysort year country: egen total_opstock = total(industry_opstock)
-bysort year country: egen total_delivered = total(industry_delivered)
-bysort year country: egen total_opdeli = total(industry_opdeli)
+bysort year country: egen classified_opstock = total(op_stock * (is_unclas == 0))
+label variable classified_opstock "Total classified op_stock (300번 제외)"
 
-label variable total_opstock "Total: classified + unclassified (전체 합)"
-label variable total_delivered "Total: classified + unclassified (전체 합)"
-label variable total_opdeli "Total: classified + unclassified (전체 합)"
+**********************************************************************
+* STEP 5: 300번 행 제거
+**********************************************************************
+drop if is_unclas == 1
 
-********************************************************************** 
-* STEP 3: unclassified (200, 300번만)
-********************************************************************** 
-gen is_unclassified = inlist(newindcode, 200, 300)
+**********************************************************************
+* STEP 6: 산업비중 계산 (in classified data)
+**********************************************************************
+gen ind_share_opstock = op_stock / classified_opstock
+label variable ind_share_opstock "산업비중: op_stock_j / classified_opstock"
 
-bysort year country: egen unclassified_opstock = total(industry_opstock) if is_unclassified == 1
-bysort year country: egen unclassified_delivered = total(industry_delivered) if is_unclassified == 1
-bysort year country: egen unclassified_opdeli = total(industry_opdeli) if is_unclassified == 1
+sort country year newindcode 
+**********************************************************************
+* STEP 7: unclassified 배분 → 최종값
+**********************************************************************
+gen final_opstock = op_stock + (unclas_opstock * ind_share_opstock)
+label variable final_opstock "배분후 최종 op_stock (adjusted)"
 
-// missing 채우기 (같은 year-country 그룹 내 모든 행에 동일값)
-bysort year country (is_unclassified): replace unclassified_opstock = unclassified_opstock[_N]
-bysort year country (is_unclassified): replace unclassified_delivered = unclassified_delivered[_N]
-bysort year country (is_unclassified): replace unclassified_opdeli = unclassified_opdeli[_N]
+* 검증: year-country별 final 합계 = 원래 total과 일치해야 함
+bysort year country: egen check_final = total(final_opstock)
+gen diff = abs(check_final - tot_opstock)
+count if diff > 0
+* → 0이어야 함 ✅
+drop check_final diff
 
-label variable unclassified_opstock "Unclassified: 200,300번 총합"
-label variable unclassified_delivered "Unclassified: 200,300번 총합"
-label variable unclassified_opdeli "Unclassified: 200,300번 총합"
-
-********************************************************************** 
-* STEP 4: classified (unclassified 제외한 나머지)
-********************************************************************** 
-bysort year country: egen classified_opstock = total(industry_opstock) if is_unclassified == 0
-bysort year country: egen classified_delivered = total(industry_delivered) if is_unclassified == 0
-bysort year country: egen classified_opdeli = total(industry_opdeli) if is_unclassified == 0
-
-// missing 채우기
-bysort year country (is_unclassified): replace classified_opstock = classified_opstock[1]
-bysort year country (is_unclassified): replace classified_delivered = classified_delivered[1]
-bysort year country (is_unclassified): replace classified_opdeli = classified_opdeli[1]
-
-label variable classified_opstock "Classified: unclassified 제외 총합"
-label variable classified_delivered "Classified: unclassified 제외 총합"
-label variable classified_opdeli "Classified: unclassified 제외 총합"
-
-********************************************************************** 
-* STEP 3→4 전환: unclassified 행 삭제
-********************************************************************** 
-drop if is_unclassified == 1
-
-tab newind
-********************************************************************** 
-* STEP 5: 산업비중 (classified 중에서)
-********************************************************************** 
-gen industry_share_opstock = industry_opstock / classified_opstock
-gen industry_share_delivered = industry_delivered / classified_delivered
-gen industry_share_opdeli = industry_opdeli / classified_opdeli
-
-label variable industry_share_opstock "산업비중: 산업1 / classified (op_stock)"
-label variable industry_share_delivered "산업비중: 산업1 / classified (delivered)"
-label variable industry_share_opdeli "산업비중: 산업1 / classified (opdeli)"
-
-********************************************************************** 
-* STEP 6: 배분후 (최종값 = 산업1 + unclassified × 산업비중)
-********************************************************************** 
-gen final_opstock = industry_opstock + (unclassified_opstock * industry_share_opstock)
-gen final_delivered = industry_delivered + (unclassified_delivered * industry_share_delivered)
-gen final_opdeli = industry_opdeli + (unclassified_opdeli * industry_share_opdeli)
-
-label variable final_opstock "배분후 (최종): op_stock adjusted"
-label variable final_delivered "배분후 (최종): delivered adjusted"
-label variable final_opdeli "배분후 (최종): opdeli adjusted"
-	  
-// 중간 변수 제거
-drop is_unclassified
+drop is_unclas
 ********************************************************************** 
 * STEP 7: Reshape 
 * country-year-industry → year-industry (국가별 변수 분리)
 **********************************************************************
-// country 변수를 짧게 변환 (reshape에 사용)
-gen ctry = ""
-replace ctry = "KR" if country == "Rep. of Korea"
-replace ctry = "SG" if country == "Singapore"
-tab ctry 
-drop country 
-
-label variable ctry "Country code: KR=Korea, SG=Singapore"
-
-// Reshape할 변수 리스트 정의
-local vars_to_reshape "industry_opstock industry_delivered industry_opdeli total_opstock total_delivered total_opdeli unclassified_opstock unclassified_delivered unclassified_opdeli classified_opstock classified_delivered classified_opdeli industry_share_opstock industry_share_delivered industry_share_opdeli final_opstock final_delivered final_opdeli"
-					   
+drop country industrycode industry op_stock tot_opstock unclas_opstock classified_opstock ind_share_opstock
+		   
 // Reshape: long → wide
-reshape wide `vars_to_reshape', i(year newindcode newind) j(ctry) string
+reshape wide final_opstock, i(year newindcode newind) j(countrycode) string
 
-// 변수명 정리 (더 명확하게)
-foreach var in `vars_to_reshape' {
-    rename `var'KR `var'_kr
-    rename `var'SG `var'_sg
-    
-    label variable `var'_kr "`var' (Korea)"
-    label variable `var'_sg "`var' (Singapore)"
-}
+rename final_opstockKR final_opstock_kr 
+rename final_opstockSG final_opstock_sg
 
+keep if year>=2006 
+
+save "$interim/IFR/IFR_robot.dta", replace 
 ********************************************************************
 * delta_robot j,t (kr)
-* 1) long difference 
-* 2) first difference 
+* 1) long difference: ver1) 2007~2022, ver2) 2012~2022
+* 2) stacked difference: 2007~2012, 2012~2017, 2017~2022 
+* t0 = year 
 *********************************************************************
-* delta_robot j,t (sgp)
-* 1) long difference 
-* 2) first difference 
-*********************************************************************
-* 2012년 데이터 저장
-preserve
-keep if year == 2012
-keep newindcode final_opstock_kr final_opstock_sg
-rename final_opstock_kr opstock_kr_2012
-rename final_opstock_sg opstock_sg_2012
-tempfile base2012
-save `base2012'
-restore
+keep if year == 2007 | year == 2012 | year == 2017 | year == 2022 
 
-* 2017년 데이터 저장
-preserve
-keep if year == 2017
-keep newindcode final_opstock_kr final_opstock_sg
-rename final_opstock_kr opstock_kr_2017
-rename final_opstock_sg opstock_sg_2017
-tempfile base2017
-save `base2017'
-restore
+* 기준연도 저장 (t0 후보: 2007, 2012, 2017)
+foreach yr in 2007 2012 2017 2022 {
+    preserve
+    keep if year == `yr'
+    keep newindcode final_opstock_kr final_opstock_sg
+    rename final_opstock_kr opstock_kr_`yr'
+    rename final_opstock_sg opstock_sg_`yr'
+    tempfile base`yr'
+    save `base`yr''
+    restore
+}
 
-* 원본에 merge
+merge m:1 newindcode using `base2007', nogen
 merge m:1 newindcode using `base2012', nogen
 merge m:1 newindcode using `base2017', nogen
-
-label variable opstock_kr_2012 "Korea: op_stock in 2012"
-label variable opstock_sg_2012 "Singapore: op_stock in 2012"
-label variable opstock_kr_2017 "Korea: op_stock in 2017"
-label variable opstock_sg_2017 "Singapore: op_stock in 2017"
-********************************************************************** Long Difference (2012 기준)
+merge m:1 newindcode using `base2022', nogen
+**********************************************************************
+* Long Difference - ver 1)  2007~2022 (t0 =2007, t1 = 2022)
 ********************************************************************** 
-* Korea
-gen LD_opstock_kr = .
-replace LD_opstock_kr = final_opstock_kr - opstock_kr_2012 if year == 2017
-replace LD_opstock_kr = final_opstock_kr - opstock_kr_2012 if year == 2022
+gen LD_opstock_kr_0722 = opstock_kr_2022 - opstock_kr_2007 if year == 2007
+gen LD_opstock_sg_0722 = opstock_sg_2022 - opstock_sg_2007 if year == 2007
 
-* Singapore
-gen LD_opstock_sg = .
-replace LD_opstock_sg = final_opstock_sg - opstock_sg_2012 if year == 2017
-replace LD_opstock_sg = final_opstock_sg - opstock_sg_2012 if year == 2022
+label variable LD_opstock_kr_0722 "Korea: LD Δop_stock (2007→2022)"
+label variable LD_opstock_sg_0722 "Singapore: LD Δop_stock (2007→2022)"
 
-label variable LD_opstock_kr "Korea: Long Diff Δop_stock (2012 base)"
-label variable LD_opstock_sg "Singapore: Long Diff Δop_stock (2012 base)"
+*---------------------------------------------------------------------
+* Long Difference 2: 2012-2022 (t0=2012, t1=2022)
+*---------------------------------------------------------------------
+gen LD_opstock_kr_1222 = opstock_kr_2022 - opstock_kr_2012 if year == 2012
+gen LD_opstock_sg_1222 = opstock_sg_2022 - opstock_sg_2012 if year == 2012
 
-sort year newindcode
-order year newindcode final_opstock_sg opstock_sg_2012 opstock_sg_2017 LD_opstock_sg final_opstock_kr opstock_kr_2012 opstock_kr_2017 LD_opstock_kr
+label variable LD_opstock_kr_1222 "Korea: LD Δop_stock (2012→2022)"
+label variable LD_opstock_sg_1222 "Singapore: LD Δop_stock (2012→2022)"
 
-br if year==2012 | year==2017 | year==2022
+*---------------------------------------------------------------------
+* Stacked Difference (t0 = year)
+* 2007-2012: year==2007 행에 생성
+* 2012-2017: year==2012 행에 생성
+* 2017-2022: year==2017 행에 생성
+*---------------------------------------------------------------------
+gen SD_opstock_kr = .
+gen SD_opstock_sg = .
 
-*********************************************************************
-* First Difference (연속 기간)
-********************************************************************** 
-* Korea
-gen FD_opstock_kr = .
-replace FD_opstock_kr = final_opstock_kr - opstock_kr_2012 if year == 2017
-replace FD_opstock_kr = final_opstock_kr - opstock_kr_2017 if year == 2022
+* 2007-2012
+replace SD_opstock_kr = opstock_kr_2012 - opstock_kr_2007 if year == 2007
+replace SD_opstock_sg = opstock_sg_2012 - opstock_sg_2007 if year == 2007
 
-* Singapore
-gen FD_opstock_sg = .
-replace FD_opstock_sg = final_opstock_sg - opstock_sg_2012 if year == 2017
-replace FD_opstock_sg = final_opstock_sg - opstock_sg_2017 if year == 2022
+* 2012-2017
+replace SD_opstock_kr = opstock_kr_2017 - opstock_kr_2012 if year == 2012
+replace SD_opstock_sg = opstock_sg_2017 - opstock_sg_2012 if year == 2012
 
-label variable FD_opstock_kr "Korea: First Diff Δop_stock (2012-17, 17-22)"
-label variable FD_opstock_sg "Singapore: First Diff Δop_stock (2012-17, 17-22)"
+* 2017-2022
+replace SD_opstock_kr = opstock_kr_2022 - opstock_kr_2017 if year == 2017
+replace SD_opstock_sg = opstock_sg_2022 - opstock_sg_2017 if year == 2017
 
-order year newindcode final_opstock_sg opstock_sg_2012 opstock_sg_2017 LD_opstock_sg FD_opstock_sg final_opstock_kr opstock_kr_2012 opstock_kr_2017 LD_opstock_kr FD_opstock_kr
+label variable SD_opstock_kr "Korea: Stacked Diff Δop_stock (t0→t0+5)"
+label variable SD_opstock_sg "Singapore: Stacked Diff Δop_stock (t0→t0+5)"
 
-br if year==2012 | year==2017 | year==2022
+*
+sort year newindcode 
+
+* period 변수 생성 (stacked 구분자)
+gen SDperiod = ""
+replace SDperiod = "2007-2012" if year == 2007
+replace SDperiod = "2012-2017" if year == 2012
+replace SDperiod = "2017-2022" if year == 2017
+
+label variable SDperiod "Stacked period identifier"
+
+order year newindcode opstock_kr* LD_opstock_kr* SD_opstock_kr opstock_sg* LD_opstock_sg* SD_opstock_sg
 
 compress
-save "$data/Robot_IFR_clean.dta", replace 
-
-/*
-******************************************************************** 
-* 검증: 배분 후 총합 확인
-********************************************************************** 
-di _newline(2) "=" * 70
-di "VERIFICATION: 배분 후 총합이 원래 total과 일치하는지 확인"
-di "=" * 70
-
-bysort year country: egen check_sum_opstock = total(final_opstock)
-bysort year country: egen check_sum_delivered = total(final_delivered)
-
-gen diff_opstock = abs(check_sum_opstock - total_opstock)
-gen diff_delivered = abs(check_sum_delivered - total_delivered)
-
-// 예시 출력: 2010년 한국
-preserve
-keep if year == 2010 & country == "Rep. of Korea"
-list newindcode newind ///
-     industry_opstock industry_share_opstock final_opstock ///
-     unclassified_opstock classified_opstock, ///
-     separator(0) abbreviate(10)
-restore
-
-// 전체 검증
-quietly count if diff_opstock > 0.01 | diff_delivered > 0.01
-if r(N) == 0 {
-    di _newline(1) "✓ SUCCESS: 모든 year-country에서 총합 일치!"
-}
-else {
-    di _newline(1) "✗ WARNING: 일부 year-country에서 오차 발견"
-    list year country diff_opstock diff_delivered if diff_opstock > 0.01 | diff_delivered > 0.01
-}
-
-di "=" * 70 _newline(1)
-
-drop check_* diff_*
-*/  
-
-
-
-// IFR 데이터 -> 한국 로봇수, 싱가폴 로봇 수 
-
-// COE 데이터 -> employment (number), employment share 둘다 구해야함 
-
-
-/* 김혜진 교수님 논문에서 사용하는 산업 분류 18개
-//6  
-agriculture, 101 
-mining, 102 
-utilities, 103 
-construction, 104 
-research, 105 
-and services. 106 
-
-// 12 
-food and beverages, 107 
-textiles, 108
-paper and printing, 109
-plastics and chemicals, 110
-minerals, 111 
-basic metals, 112 
-metal products, 113
-metal and machinery, 
-electronics, 115
-automotive, 116
-other vehicles (for example, shipbuilding and aerospace), 117
-and other manufacturing (including wood and furniture). 118, 119 
-*/ 
+save "$data/IFR_clean.dta", replace 

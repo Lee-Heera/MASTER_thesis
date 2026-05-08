@@ -19,7 +19,7 @@ clear all
 ********************************************************************** 
 use "$prof_raw/employmentCOE.dta" 
 
-tab newindcode // 101~119 까지 사용, 118+119 aggregate 필요 
+tab newindcode // 101~119 까지 사용 
 
 keep if newindcode >= 101 & newindcode <= 119 
 drop if year < 1995 
