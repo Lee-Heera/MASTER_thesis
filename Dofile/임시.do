@@ -1,5 +1,4 @@
 clear 
-
 import excel "/Users/ihuila/Desktop/research/mater thesis/국회의원선거구역/예나씨/제22대_선거구구역표.xlsx", sheet("Sheet1") firstrow
 
 ren 시도 sido_nm 

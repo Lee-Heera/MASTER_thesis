@@ -4,7 +4,7 @@
 **********************************************************************
 clear all
 
-	global main "/Users/ihuila/Desktop/data/master thesis"
+	global main "/Users/ihuila/Research/MASTER_thesis"
 	global data "${main}/Data cleaned"
 	global interim "${main}/Data interim"
 	global final "${main}/Data final"
@@ -15,6 +15,8 @@ clear all
 	global oarlr "${main}/Data raw/OARLR"
 	global singapore "${main}/Data raw/Singapore"
 	*/
+	
+	
 **********************************************************************	
 import excel "$prof_raw/UNIDO_singapore.xlsx", sheet("Data") firstrow
 
@@ -58,10 +60,8 @@ tab year // 13개 산업
 ren emp sgp_empl 
 
 replace sgp_empl = sgp_empl/1000 // 1000단위 맞추기 
-keep if year >= 2010 & year<=2022 
 
-
-save "$interim/sgp_emp_manu.dta", replace 
+save "$interim/UNIDO/sgp_empl.dta", replace 
 
 // 산업 매칭 
 /*
