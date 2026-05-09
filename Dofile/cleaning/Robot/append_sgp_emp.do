@@ -38,6 +38,13 @@ tab _merge // _merge==3 만 남음
 keep newindcode year sgp_empl newind
 
 tab newindcode  // 19개의 산업 
+
+label var sgp_empl "emp_sg j,t"
+
+sort year newindcode  // 2005~2025
+
+save "$data/sgp_empl.dta", replace 
+
 /*
 ********************************************************************** 
 * wood & furniture 통합
@@ -47,50 +54,4 @@ replace newind = "other manufacturing" if newindcode == 118
 
 collapse (sum) sgp_empl , by(year newindcode newind)
 */
-label var sgp_empl "emp_sg j,t"
 
-*****************************************************
-* emp_sg j,2005 만들기 
-*****************************************************
-preserve
-keep if year == 2005
-collapse (sum) sgp_empl, by(newindcode)
-rename sgp_empl sgp_empl_j2005  // 수정: sgp_empl을 rename
-tempfile ind2005
-save `ind2005'
-restore
-
-merge m:1 newindcode using `ind2005', nogen
-label variable sgp_empl_j2005 "Total employment in industry j, year 2005"  
-
-*****************************************************
-* emp_sg j,2012 만들기 
-*****************************************************
-preserve
-keep if year == 2012
-collapse (sum) sgp_empl, by(newindcode)
-rename sgp_empl sgp_empl_j2012  // 수정: sgp_empl을 rename
-tempfile ind2012
-save `ind2012'
-restore
-
-merge m:1 newindcode using `ind2012', nogen
-label variable sgp_empl_j2012 "Total employment in industry j, year 2012" 
-
-*****************************************************
-* emp_sg j,2010 만들기 
-*****************************************************
-preserve
-keep if year == 2010
-collapse (sum) sgp_empl, by(newindcode)
-rename sgp_empl sgp_empl_j2010  // 수정: sgp_empl을 rename
-tempfile ind2010
-save `ind2010'
-restore
-
-merge m:1 newindcode using `ind2010', nogen
-label variable sgp_empl_j2010 "Total employment in industry j, year 2010"  
-
-sort year newindcode 
-
-save "$data/sgp_empl.dta", replace 
