@@ -1,68 +1,84 @@
-***** 2022년 대선 - 전국 합치기 
-clear
-cd "/Users/ihuila/Desktop/data/master thesis/raw/PresiE/2022"
+**********************************************************************  
+* Robot and automation
+* Singapore Employment Statistics clean do-file
+**********************************************************************
+clear all
 
+	global main "/Users/ihuila/Research/MASTER_thesis"
+	global data "${main}/Data cleaned"
+	global interim "${main}/Data interim"
+	global final "${main}/Data final"
+	global prof_raw "${main}/Data raw/professor_raw"	
+	/*
+	global ifr "${main}/Data raw/IFR"
+	global kepco  "${main}/Data raw/KEPCO"
+	global oarlr "${main}/Data raw/OARLR"
+	global singapore "${main}/Data raw/Singapore"
+	*/
+	
+**********************************************************************
 // 파일 이름과 시도명 매칭 리스트
-local files 2022busan 2022CHB 2022CHN 2022daegu 2022daejeon 2022GB 2022GN 2022GW 2022gwangju 2022gyeonggi 2022incheon 2022JB 2022JJ 2022JN 2022seoul 2022SJ 2022ulsan
-local names 부산광역시 충청북도 충청남도 대구광역시 대전광역시 경상북도 경상남도 강원도 광주광역시 경기도 인천광역시 전라북도 제주특별자치도 전라남도 서울특별시 세종특별자치시 울산광역시
+local in "$main/Data raw/대선_개표/2017"
+local out "$interim/대선_개표/2017"
+local files  `" "강원도" "경기도" "경상남도" "경상북도" "광주광역시" "대구광역시" "대전광역시" "부산광역시" "서울특별시" "울산광역시" "인천광역시" "전라남도" "전라북도" "제주특별자치도" "충청남도" "충청북도" "세종특별자치시" "'
 
-// 1단계: 엑셀 -> dta + sido_nm 생성
-local i = 1
-foreach f of local files {
-    import excel "`f'.xlsx", firstrow clear
-
-    // sido_nm 변수 생성
-    local region : word `i' of `names'
+foreach region of local files {
+    
+    local fname "개표현황[제19대][대통령선거][`region'].xlsx"
+    
+    import excel "`in'/`fname'", firstrow clear
+    
     gen sido_nm = "`region'"
-	drop in 1/3 
-	drop in L 
-
-    save "/Users/ihuila/Desktop/data/master thesis/afterpresi/2022/`f'.dta", replace
-    local ++i
+    
+    drop in 1/3
+    drop in L
+    
+    save "`out'/`region'.dta", replace
+    
+    di "완료: `region'"
 }
 
 // 2단계: append로 하나로 합치기
-clear
-cd "/Users/ihuila/Desktop/data/master thesis/afterpresi/2022"
+use "$interim/대선_개표/2017/강원도.dta", clear
 
-use 2022busan.dta, clear
+cd "$interim/대선_개표/2017"
+local files  `" "강원도" "경기도" "경상남도" "경상북도" "광주광역시" "대구광역시" "대전광역시" "부산광역시" "서울특별시" "울산광역시" "인천광역시" "전라남도" "전라북도" "제주특별자치도" "충청남도" "충청북도" "세종특별자치시" "'
 
-foreach f of local files {
-    if "`f'" != "2022busan" {
-        append using `f'.dta
+foreach region of local files {
+    if "`region'" != "강원도" {
+        append using "`region'.dta", force
     }
 }
 
-
-// 결과 저장
-save "/Users/ihuila/Desktop/data/master thesis/afterpresi/2022/2022premerge.dta", replace
-
+save "$interim/대선_개표/2017/preappend.dta", replace
+**********************************************************************************
 ** cleaning 
-use 2022premerge.dta, clear 
+use "$interim/대선_개표/2017/preappend.dta", clear 
 
 ren B 선거인수
 ren C 투표수 
 
 ren D 더불어민주당 
-ren E 국민의힘
-ren F 정의당 
-ren G 기본소득당 
-ren H 국가혁명당 
-ren I 노동당 
-ren J 새누리당 
-ren K 신자유민주연합 
-ren L 우리공화당 
-ren M 진보당 
-ren N 통일한국당 
-ren O 한류연합당 
+ren E 자유한국당
+ren F 국민의당 
+ren G 바른정당 
+ren H 정의당 
+ren I 새누리당 
+ren J 경제애국당 
+ren K 국민대통합당 
+ren L 늘푸른한국당 
+ren M 민중연합당 
+ren N 한국국민당 
+ren O 홍익당 
+ren P 무소속김민찬 
 
-ren P 유효투표수
-ren Q 무효투표
-ren R 기권 
+ren Q 유효투표수
+ren R 무효투표
+ren S 기권
 
 ren 중앙선거관리위원회선거통계시스템 A 
 
-drop S 
+drop T
 
 order sido_nm A 
 drop in 1/3
@@ -93,7 +109,7 @@ drop A_clean
 
 ren A sigungu_nm 
 
-destring 선거인수 투표수 더불어민주당 국민의힘 정의당 기본소득당 국가혁명당 노동당 새누리당 신자유민주연합 우리공화당 진보당 통일한국당 한류연합당 유효투표수 무효투표 기권, replace ignore(",")
+destring 선거인수 투표수 더불어민주당 자유한국당 국민의당 바른정당 정의당 새누리당 경제애국당 국민대통합당 늘푸른한국당 민중연합당 한국국민당 홍익당 무소속김민찬 유효투표수 무효투표 기권, replace ignore(",")
 
 ************ STEP2: 변경된 시군구 -> 데이터 통합 혹은 변경 
 ****** 1) 인천광역시 남구 -> 미추홀구로 명칭변경  (명칭변경)
@@ -105,10 +121,11 @@ drop if sigungu_nm == "연기군"
 ***** 3)여주군 -> 여주시로 이름 변경 
 replace sigungu_nm = "여주시" if sido_nm=="경기도" & sigungu_nm=="여주군" 
  
+ 
 ********************************************************************************
 * 4) 나머지 구로 쪼개진 시들 → 시로 통합
 ********************************************************************************
-local varlist 선거인수 투표수 더불어민주당 국민의힘 정의당 기본소득당 국가혁명당 노동당 새누리당 신자유민주연합 우리공화당 진보당 통일한국당 한류연합당 유효투표수 무효투표 기권
+local varlist 선거인수 투표수 더불어민주당 자유한국당 국민의당 바른정당 정의당 새누리당 경제애국당 국민대통합당 늘푸른한국당 민중연합당 한국국민당 홍익당 무소속김민찬 유효투표수 무효투표 기권
 
 local cities  "수원시 성남시 안양시 안산시 고양시 용인시 전주시 포항시 천안시 창원시 청주시" /*부천시*/
 
@@ -178,11 +195,13 @@ foreach city of local cities {
 ******************************************************
 sort sido_nm sigungu_nm 
 
-gen year=2022 
+// replace sigungu_nm="당진시" if sigungu_nm=="당진군"
+
+gen year=2017 
 
 // 세종1, 제주2, 나머지 226 -> 총obs 229 
 
-keep sido_nm sigungu_nm 선거인수 투표수 유효투표수 무효투표 기권 year 더불어민주당 국민의힘
+keep sido_nm sigungu_nm 선거인수 투표수 유효투표수 무효투표 기권 year 더불어민주당 자유한국당 국민의당 바른정당 정의당
 
-cd "/Users/ihuila/Desktop/data/master thesis/afterpresi/2022/"
-save 2022premerge.dta, replace 
+tab year 
+save  "$data/2017president_clean.dta", replace 

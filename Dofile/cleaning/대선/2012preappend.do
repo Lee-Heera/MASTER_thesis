@@ -1,43 +1,58 @@
-***** 2022년 대선 - 전국 합치기 
-clear
-cd "/Users/ihuila/Desktop/data/master thesis/raw/PresiE/2012"
+**********************************************************************  
+* Robot and automation
+* Singapore Employment Statistics clean do-file
+**********************************************************************
+clear all
 
+	global main "/Users/ihuila/Research/MASTER_thesis"
+	global data "${main}/Data cleaned"
+	global interim "${main}/Data interim"
+	global final "${main}/Data final"
+	global prof_raw "${main}/Data raw/professor_raw"	
+	/*
+	global ifr "${main}/Data raw/IFR"
+	global kepco  "${main}/Data raw/KEPCO"
+	global oarlr "${main}/Data raw/OARLR"
+	global singapore "${main}/Data raw/Singapore"
+	*/
+**********************************************************************
 // 파일 이름과 시도명 매칭 리스트
-local files 2012busan 2012CHB 2012CHN 2012daegu 2012daejeon 2012GB 2012GN 2012GW 2012gwangju 2012gyeonggi 2012incheon 2012JB 2012JJ 2012JN 2012seoul 2012SJ 2012ulsan
-local names 부산광역시 충청북도 충청남도 대구광역시 대전광역시 경상북도 경상남도 강원도 광주광역시 경기도 인천광역시 전라북도 제주특별자치도 전라남도 서울특별시 세종특별자치시 울산광역시
+local in "$main/Data raw/대선_개표/2012"
+local out "$interim/대선_개표/2012"
+local files  `" "강원도" "경기도" "경상남도" "경상북도" "광주광역시" "대구광역시" "대전광역시" "부산광역시" "서울특별시" "울산광역시" "인천광역시" "전라남도" "전라북도" "제주특별자치도" "충청남도" "충청북도" "세종특별자치시" "'
 
-// 1단계: 엑셀 -> dta + sido_nm 생성
-local i = 1
-foreach f of local files {
-    import excel "`f'.xlsx", firstrow clear
-
-    // sido_nm 변수 생성
-    local region : word `i' of `names'
+foreach region of local files {
+    
+    local fname "개표현황[제18대][대통령선거][`region'].xlsx"
+    
+    import excel "`in'/`fname'", firstrow clear
+    
     gen sido_nm = "`region'"
-	drop in 1/3 
-	drop in L 
-
-    save "/Users/ihuila/Desktop/data/master thesis/afterpresi/2012/`f'.dta", replace
-    local ++i
+    
+    drop in 1/3
+    drop in L
+    
+    save "`out'/`region'.dta", replace
+    
+    di "완료: `region'"
 }
 
 // 2단계: append로 하나로 합치기
-clear
-cd "/Users/ihuila/Desktop/data/master thesis/afterpresi/2012"
+use "$interim/대선_개표/2012/강원도.dta", clear
 
-use 2012busan.dta, clear
+cd "$interim/대선_개표/2012"
+local files  `" "강원도" "경기도" "경상남도" "경상북도" "광주광역시" "대구광역시" "대전광역시" "부산광역시" "서울특별시" "울산광역시" "인천광역시" "전라남도" "전라북도" "제주특별자치도" "충청남도" "충청북도" "세종특별자치시" "'
 
-foreach f of local files {
-    if "`f'" != "2012busan" {
-        append using `f'.dta
+foreach region of local files {
+    if "`region'" != "강원도" {
+        append using "`region'.dta", force
     }
 }
 
-// 결과 저장
-save "/Users/ihuila/Desktop/data/master thesis/afterpresi/2012/2012premerge.dta", replace
-
+save "$interim/대선_개표/2012/preappend.dta", replace
+**********************************************************************************
 ** cleaning 
-use 2012premerge.dta, clear 
+use "$interim/대선_개표/2012/preappend.dta", clear 
 
 ren B 선거인수
 ren C 투표수 
@@ -241,10 +256,10 @@ replace sigungu_nm="당진시" if sigungu_nm=="당진군"
 
 gen year=2012  
 
+tab year 
 // 세종 1, 제주2, 나머지 226 
 // obs = 229 
 
 keep sido_nm sigungu_nm 선거인수 투표수 유효투표수 무효투표 기권 year 새누리당 민주통합당 
 
-cd "/Users/ihuila/Desktop/data/master thesis/afterpresi/2012/"
-save 2012premerge.dta, replace 
+save "$data/2012president_clean.dta", replace 
