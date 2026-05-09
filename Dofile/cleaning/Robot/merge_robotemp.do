@@ -1,10 +1,10 @@
 **********************************************************************  
-* Robot and automation project 
+* Robot and automation
 * Singapore Employment Statistics clean do-file
 **********************************************************************
 clear all
 
-	global main "/Users/ihuila/Desktop/data/master thesis"
+	global main "/Users/ihuila/Research/MASTER_thesis"
 	global data "${main}/Data cleaned"
 	global interim "${main}/Data interim"
 	global final "${main}/Data final"
@@ -15,116 +15,159 @@ clear all
 	global oarlr "${main}/Data raw/OARLR"
 	global singapore "${main}/Data raw/Singapore"
 	*/
+	
 ********************************************************************** 
-use "$data/Emp_COE_clean.dta"
+use "$data/kor_empl.dta" // COE 데이터만 미리 변수 만들어놓고 2005년도 이후 데이터로 컷해놓음 
 
-merge m:1 year newindcode using "$data/Robot_IFR_clean.dta"
+merge m:1 year newindcode using "$data/sgp_empl.dta" // 둘다 2005~부터 있음 
 drop _merge 
 
-merge m:1 year newindcode using "$data/sgp_emp.dta"
-tab year if _merge==1 // 1995~2009년도 데이터 때문, 싱가포르 고용데이터에서는 1995~2009년도 x 
+merge m:1 year newindcode using "$data/IFR_robot.dta" // 둘다 2005~부터 있음 
 drop _merge 
 
-****** 대선연도에 맞추기 
-keep if year ==2012 | year == 2017 | year == 2022 
+*****************************************************
+* emp_ j,고정연도 (singapore)
+*****************************************************
+foreach yr in 2005 2007 2010 2012 {
+    preserve
+    keep if year == `yr'
+    collapse (mean) sgp_empl, by(newindcode)
+    rename sgp_empl sgp_empj`yr'
+    tempfile sgp_j`yr'
+    save `sgp_j`yr''
+    restore
+    merge m:1 newindcode using `sgp_j`yr'', nogen
+    label variable sgp_empj`yr' "Singapore employment in industry j, year `yr'"
+}
 
-*******************************************************************
-* FD Robot j,t = FD_opstock_kr 
-* FD Robot j,t(sgp) = FD_opstock_sg
+drop sgp_empl
+sort year regioncode  newindcode 
 
-* LD Robot j,t = LD_opstock_kr 
-* LD Robot j,t(sgp) = LD_opstock_sg 
+keep if  year==2007 | year ==2012 | year == 2017 | year == 2022 
+*****************************************************
+* delta_robot j (LD & SD)
+* final_opstock_kr, final_opstock_sg 이미 머지되어있음
+*****************************************************
 
-* Emp j,2012 
-* Emp j,2012(sgp)
+* 기준연도 저장
+foreach yr in 2007 2012 2017 2022 {
+    preserve
+    keep if year == `yr'
+    collapse (mean) final_opstock_kr final_opstock_sg, by(newindcode)
+    rename final_opstock_kr opstock_kr_`yr'
+    rename final_opstock_sg opstock_sg_`yr'
+    tempfile base`yr'
+    save `base`yr''
+    restore
+    merge m:1 newindcode using `base`yr'', nogen
+    label variable opstock_kr_`yr' "Korea: op_stock in `yr'"
+    label variable opstock_sg_`yr' "Singapore: op_stock in `yr'"
+}
+*---------------------------------------------------------------------
+* Long Difference ver1) 2007~2022
+*---------------------------------------------------------------------
+gen LD_opstock_kr_0722 = opstock_kr_2022 - opstock_kr_2007
+gen LD_opstock_sg_0722 = opstock_sg_2022 - opstock_sg_2007
+label variable LD_opstock_kr_0722 "Korea: LD Δop_stock (2007→2022)"
+label variable LD_opstock_sg_0722 "Singapore: LD Δop_stock (2007→2022)"
 
-* Emp i,j,t = emp_ijt 
-* Emp i,t = emp_it 
+*---------------------------------------------------------------------
+* Long Difference ver2) 2012~2022
+*---------------------------------------------------------------------
+gen LD_opstock_kr_1222 = opstock_kr_2022 - opstock_kr_2012
+gen LD_opstock_sg_1222 = opstock_sg_2022 - opstock_sg_2012
+label variable LD_opstock_kr_1222 "Korea: LD Δop_stock (2012→2022)"
+label variable LD_opstock_sg_1222 "Singapore: LD Δop_stock (2012→2022)"
 
-* Emp i,j,1995 = emp_ij1995 
-* Emp i,1995 = emp_i1995 
+*---------------------------------------------------------------------
+* Stacked Difference (t0 = year)
+*---------------------------------------------------------------------
+gen SD_opstock_kr = .
+gen SD_opstock_sg = .
+
+replace SD_opstock_kr = opstock_kr_2012 - opstock_kr_2007 if year == 2007
+replace SD_opstock_sg = opstock_sg_2012 - opstock_sg_2007 if year == 2007
+
+replace SD_opstock_kr = opstock_kr_2017 - opstock_kr_2012 if year == 2012
+replace SD_opstock_sg = opstock_sg_2017 - opstock_sg_2012 if year == 2012
+
+replace SD_opstock_kr = opstock_kr_2022 - opstock_kr_2017 if year == 2017
+replace SD_opstock_sg = opstock_sg_2022 - opstock_sg_2017 if year == 2017
+
+label variable SD_opstock_kr "Korea: SD Δop_stock (t0→t0+5)"
+label variable SD_opstock_sg "Singapore: SD Δop_stock (t0→t0+5)"
+
+* period 구분자
+gen SDperiod = ""
+replace SDperiod = "2007-2012" if year == 2007
+replace SDperiod = "2012-2017" if year == 2012
+replace SDperiod = "2017-2022" if year == 2017
+label variable SDperiod "Stacked period identifier"
+
+drop final_opstock_kr final_opstock_sg
+
+sort year regioncode newindcode
+compress
 ******************************************************************* 
 * X 변수 및 IV 생성
 * 데이터: year × regioncode × newindcode 패널
+* X - share year 고정: 2005
+* IV - share year: 1995 
+* X, IV - shock denominator year: 2005 
 ********************************************************************
-* STEP 1: 고용 비중 계산 
-* emp i,j,t/emp i,t
-* emp i,j,1995 / emp i,1995 
-*******************************************************************
-* 지역-산업별 고용 비중
-gen share_ij1995 = emp_ij1995 / emp_i1995 
-label var share_ij1995 "Employment share: Emp_i,j,1995 / Emp_i,1995"
+*---------------------------------------------------------------------
+* Long Difference ver1) 2007~2022
+*---------------------------------------------------------------------
+* X: share05 × (LD_kr_0722 / emp_j2005)
+gen X_ij_LD0722 = share05 * (LD_opstock_kr_0722 / emp_j2005)
+bysort regioncode year: egen X_LD0722 = total(X_ij_LD0722)
+label variable X_LD0722 "Bartik X: LD 2007-2022 (share05, emp_j2005)"
 
-gen share_ijt = emp_ijt / emp_it
-label var share_ijt "Employment share: Emp_i,j,1995 / Emp_i,1995"
-*******************************************************************
-* STEP 2: 로봇 밀도 계산 (산업별)
-*******************************************************************
-* Long Difference
-gen robot_density_LD_kr = LD_opstock_kr / emp_j2012 
-gen robot_density_LD_sg = LD_opstock_sg / sgp_empl_j2012
+* IV: share95 × (LD_sg_0722 / sgp_empj2005)
+gen Z_ij_LD0722 = share95 * (LD_opstock_sg_0722 / sgp_empj2005)
+bysort regioncode year: egen Z_LD0722 = total(Z_ij_LD0722)
+label variable Z_LD0722 "Bartik IV: LD 2007-2022 (share95, sgp_empj2005)"
 
-label var robot_density_LD_kr "Korea: ΔRobot_j(LD) / Emp_j,2012"
-label var robot_density_LD_sg "Singapore: ΔRobot_j(LD) / Emp_j,2012"
+drop X_ij_LD0722 Z_ij_LD0722
 
-* First Difference
-gen robot_density_FD_kr = FD_opstock_kr / emp_j2012 
-gen robot_density_FD_sg = FD_opstock_sg /sgp_empl_j2012
+*---------------------------------------------------------------------
+* Long Difference ver2) 2012~2022
+*---------------------------------------------------------------------
+* X
+gen X_ij_LD1222 = share05 * (LD_opstock_kr_1222 / emp_j2005)
+bysort regioncode year: egen X_LD1222 = total(X_ij_LD1222)
+label variable X_LD1222 "Bartik X: LD 2012-2022 (share05, emp_j2005)"
 
-label var robot_density_FD_kr "Korea: ΔRobot_j(FD) / Emp_j,2012"
-label var robot_density_FD_sg "Singapore: ΔRobot_j(FD) / Emp_j,2012"
-*******************************************************************
-* STEP 3: X 변수 (지역별 로봇 노출도) - Long Difference
-*******************************************************************
-* X_i,t = Σ_j (Emp_i,j,t / Emp_i,t) × (ΔRobot_j,t / Emp_j,2012)
+* IV
+gen Z_ij_LD1222 = share95 * (LD_opstock_sg_1222 / sgp_empj2005)
+bysort regioncode year: egen Z_LD1222 = total(Z_ij_LD1222)
+label variable Z_LD1222 "Bartik IV: LD 2012-2022 (share95, sgp_empj2005)"
 
-* 지역-연도별로 합산
-sort regioncode year newindcode
+drop X_ij_LD1222 Z_ij_LD1222
 
-* Long Difference
-by regioncode year: egen X_robot_LD = total(share_ijt * robot_density_LD_kr) if inlist(year, 2017, 2022)
-label var X_robot_LD "Robot Exposure (LD): Korea robot × 1995 shares"
+*---------------------------------------------------------------------
+* Stacked Difference
+*---------------------------------------------------------------------
+* X
+gen X_ij_SD = share05 * (SD_opstock_kr / emp_j2005)
+bysort regioncode year: egen X_SD = total(X_ij_SD) 
+replace X_SD = . if year == 2022   // 2022년도는 endpoint 라서 수동으로 missing 처리 
+label variable X_SD "Bartik X: SD (share05, emp_j2005)"
 
-* First Difference  
-by regioncode year: egen X_robot_FD = total(share_ijt * robot_density_FD_kr) if inlist(year, 2017, 2022)
-label var X_robot_FD "Robot Exposure (FD): Korea robot × 1995 shares"
-
-*******************************************************************
-* STEP 4: IV (도구변수) - Singapore robot
-*******************************************************************
-* IV_i,t = Σ_j (Emp_i,j,1995 / Emp_i,1995) × (ΔRobot_j,SG,t / Emp_j,SG,2012)
-
-* Long Difference
-by regioncode year: egen IV_robot_LD = total(share_ij1995 * robot_density_LD_sg) if inlist(year, 2017, 2022)
-label var IV_robot_LD "Robot IV (LD): Singapore robot × KR 1995 shares"
-
-* First Difference
-by regioncode year: egen IV_robot_FD = total(share_ij1995 * robot_density_FD_sg) if inlist(year, 2017, 2022)
-label var IV_robot_FD "Robot IV (FD): Singapore robot × KR 1995 shares"
+* IV
+gen Z_ij_SD = share95 * (SD_opstock_sg / sgp_empj2005)
+bysort regioncode year: egen Z_SD = total(Z_ij_SD)
+replace Z_SD = . if year == 2022    // 2022년도는 endpoint 라서 수동으로 missing 처리  
+label variable Z_SD "Bartik IV: SD (share95, sgp_empj2005)"
 
 
-collapse (mean) X_robot_LD X_robot_FD IV_robot_LD IV_robot_FD ///
-         (first) sido_nm sigungu_nm, ///
-         by(regioncode year)
 
-save "$data/Robot_COE_merged.dta", replace
-*******************************************************************
-* STEP 8: 회귀분석 예시
-*******************************************************************
-/*
-* Long Difference - 2017년
-reghdfe outcome X_robot_LD controls if year == 2017, ///
-    absorb(regioncode) cluster(regioncode)
+sort year regioncode newindcode
+ 
+keep year regioncode sido_nm sigungu_nm SDperiod ///
+     X_LD0722 Z_LD0722 X_LD1222 Z_LD1222 X_SD Z_SD
 
-* Long Difference - 2017년 (IV)
-ivreghdfe outcome controls (X_robot_LD = IV_robot_LD) if year == 2017, ///
-    absorb(regioncode) cluster(regioncode) first
+duplicates drop year regioncode, force
+isid year regioncode  // unique해야 함 
 
-* First Difference - Pooled (2017 + 2022)
-reghdfe outcome X_robot_FD controls if inlist(year, 2017, 2022), ///
-    absorb(regioncode year) cluster(regioncode)
-
-* First Difference - Pooled (IV)
-ivreghdfe outcome controls (X_robot_FD = IV_robot_FD) if inlist(year, 2017, 2022), ///
-    absorb(regioncode year) cluster(regioncode) first
-*/
+save "$data/X_final.dta", replace
