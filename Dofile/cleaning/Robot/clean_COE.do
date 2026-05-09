@@ -63,7 +63,6 @@ bysort regioncode: egen temp_sigungu = mode(sigungu_nm), maxmode
 replace sigungu_nm = temp_sigungu if missing(sigungu_nm)
 drop temp_sigungu
 
-br
 ********************************************************************
 * Employment 변수 생성 (allempl 버전만)
 * Panel: year-region-industry
@@ -71,29 +70,26 @@ br
 // 원본 변수명 정리
 rename allempl emp_ijt
 label variable emp_ijt "All employment in region i, industry j, year t"
-
 **********************************************************************
 * 지역-산업별 특정 연도 고용 (emp_i,j,특정연도)
 **********************************************************************
 
-foreach yr in 1995 2005 2010 2012 {
+foreach yr in 1995 2005 2007 2010 2012 {
     bysort regioncode newindcode: egen emp_ij`yr' = total(emp_ijt * (year == `yr'))
     label variable emp_ij`yr' "Employment in region i, industry j, year `yr'"
 }
 
-sort year regioncode newindcode
-
-
+sort year regioncode newindcode 
 **********************************************************************
 * 지역별 연도별 총 고용 (emp_i,t)
 **********************************************************************
-bysort region year: egen emp_it = total(emp_ijt)
+bysort regioncode year: egen emp_it = total(emp_ijt)
 label variable emp_it "Total employment in region i, year t"
 
 **********************************************************************
 * 지역별 특정연도 총 고용 (emp_i,특정연도)
 **********************************************************************
-foreach yr in 1995 2005 2010 2012 {
+foreach yr in 1995 2005 2007 2010 2012 {
     bysort regioncode: egen emp_i`yr' = total(emp_ijt * (year == `yr'))
     label variable emp_i`yr' "Total employment in region i, year `yr'"
 }
@@ -106,7 +102,7 @@ label variable emp_jt "Total employment in industry j, year t"
 **********************************************************************
 * 산업별 특정 연도 총 고용 (emp_j,t*) - 표준화용
 **********************************************************************
-foreach yr in 1995 2005 2010 2012 {
+foreach yr in 1995 2005 2007 2010 2012 {
     bysort newindcode: egen emp_j`yr' = total(emp_ijt * (year == `yr'))
     label variable emp_j`yr' "Total employment in industry j, year `yr'"
 }
@@ -117,26 +113,50 @@ order year regioncode newindcode emp*
 **********************************************************************
 * Employment Shares 계산
 **********************************************************************
-/*
-gen share_emp = emp_ijt / emp_it
-label variable share_emp "Employment share (current): emp_ijt / emp_it"
-*/
+br if missing(emp_i1995) // 없음 
+br if missing(emp_ij1995) // 없음 
+br if emp_i1995==0  // 울산광역시 북구 => 분모가 0이라서 share95 에서 미싱값 처리됨 
 
-gen share95 = emp_ij1995 / emp_i1995
-label variable share95 "Employment share (1995 base): emp_ij1995 / emp_i1995"
+gen share95 = emp_ij1995 / emp_i1995 
+label variable share95 "Employment share (1995 base): emp_ij1995 / emp_i1995" 
+
+**********
+br if missing(emp_i2005) // 없음 
+br if missing(emp_ij2005) // 없음 
+br if emp_i2005==0  // 없음 
 
 gen share05 = emp_ij2005 / emp_i2005
 label variable share05 "Employment share (2005 base): emp_ij2005 / emp_i2005"
 
+**********
+br if missing(emp_i2007) // 없음 
+br if missing(emp_ij2007) // 없음 
+br if emp_i2007==0  // 없음 
+
+gen share07 = emp_ij2007 / emp_i2007
+label variable share07 "Employment share (2007 base): emp_ij2007 / emp_i2007"
+
+**********
+br if missing(emp_i2010) // 없음 
+br if missing(emp_ij2010) // 없음 
+br if emp_i2010==0  // 없음 
 gen share10 = emp_ij2010 / emp_i2010
 label variable share10 "Employment share (2010 base): emp_ij2010 / emp_i2010"
 
+**********
+br if missing(emp_i2012) // 없음 
+br if missing(emp_ij2012) // 없음 
+br if emp_i2012==0  // 없음 
 gen share12 = emp_ij2012 / emp_i2012
 label variable share12 "Employment share (2012 base): emp_ij2012 / emp_i2012"
 
-drop _fillin fullempl partempl 
-// keep if year >= 2010 & year <=2022 
+*******************************************************************************
+** share95 후처리 
+replace share95 = 0 if emp_i1995==0
 
+drop _fillin fullempl partempl emp_ijt emp_it emp_jt
+
+keep if year >= 2005 
 // time period 1995~2022
 
 save "$data/kor_empl.dta",replace 
