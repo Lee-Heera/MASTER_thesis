@@ -25,24 +25,32 @@ append using "$data/2017president_clean.dta"
 
 append using "$data/2022president_clean.dta" 
 
+append using "$data/2002president_clean.dta"
+
+append using "$data/1997president_clean.dta"
+
+/*
+// pretrend check 용 
+append using "$data/1997president_clean.dta" 
+
+append using "$data/2002president_clean.dta" 
+*/
+
 tab year 
-// 2007년도는 세종시 없어서 228개 
 
+drop if sido_nm == "세종특별자치시"
+drop if sido_nm == "제주특별자치도"
 ****************************** 지역코드 매치
-merge m:1 sido_nm sigungu_nm year  using "$interim/crosswalk/sigungu_code.dta"
+merge m:1 sido_nm sigungu_nm year  using "$data/sigungu_code.dta"
 
-tab year if _merge== 1 // 대선데이터  - 2007년도 데이터 
-tab year if _merge==2 // 대선이 없던 연도 
+tab year if _merge== 1 // 1997, 2002년도 데이터 
 
 keep if _merge ==1 | _merge ==3 
-drop if sido_nm == "세종특별자치시"
-
 ******************************* 2007년도 지역코드 넣어주기 
 * 1단계: 2012년 코드 따로 저장 (변수명 바꿔서 저장)
 preserve
     keep if year == 2012
-    keep sido_nm sigungu_nm countyid regioncode
-    rename countyid countyid_2012
+    keep sido_nm sigungu_nm regioncode
     rename regioncode regioncode_2012
     tempfile code_2012
     save `code_2012'
@@ -52,16 +60,21 @@ restore
 merge m:1 sido_nm sigungu_nm using `code_2012', keep(master match) nogen
 
 * 3단계: 2007년 관측치에만 코드 채워넣기
-replace countyid = countyid_2012 if year == 2007 & missing(countyid)
 replace regioncode = regioncode_2012 if year == 2007 & missing(regioncode)
-drop countyid_2012 regioncode_2012
+replace regioncode = regioncode_2012 if year == 2002 & missing(regioncode)
+replace regioncode = regioncode_2012 if year == 1997 & missing(regioncode)
+
+drop regioncode_2012
 
 drop _merge 
 sort sido_nm sigungu_nm 
-////////////////////////////////////////////////////////////////////////////////
-// 각 대수별 5% 미만 득표율인 후보 및 정당은 cut 
-////////////////////////////////////////////////////////////////////////////////
 
+save "$interim/대선_개표/president_append.dta", replace 
+**********************************************************************
+* 정당 매핑 (1997~2022)
+**********************************************************************
+// 1997 한나라당 새정치국민회의 국민신당 건설국민승리 공화당 바른정치연합 통일한국당 
+// 2002 한나라당 새천년민주당 하나로국민연합 민주노동당 호국당 
 // 2007 한나라당, 대통합민주신당, 창조한국당, 무소속이회창
 // 2012 새누리당, 민주통합당 
 // 2017 더불어민주당, 자유한국당, 국민의당, 바른정당, 정의당 
@@ -69,35 +82,70 @@ sort sido_nm sigungu_nm
 
 order sido_nm sigungu_nm year 선거인수 투표수 유효투표수 무효투표 기권 
 
-////// 투표수 
-// 거대양당만 
-gen liberal1_st = cond(missing(대통합민주신당), 0, 대통합민주신당) + cond(missing(민주통합당), 0, 민주통합당) + cond(missing(더불어민주당), 0, 더불어민주당) 
-gen conserv1_st = cond(missing(한나라당), 0, 한나라당) + cond(missing(새누리당), 0, 새누리당) + cond(missing(자유한국당), 0, 자유한국당) +  cond(missing(국민의힘), 0, 국민의힘)
+*---------------------------------------------------------------------
+* Version 1: 거대양당만
+*---------------------------------------------------------------------
+* 진보
+gen liberal1_st = 0
+replace liberal1_st = cond(missing(새정치국민회의), 0, 새정치국민회의) if year == 1997
+replace liberal1_st = cond(missing(새천년민주당), 0, 새천년민주당) if year == 2002
+replace liberal1_st = cond(missing(대통합민주신당), 0, 대통합민주신당) if year == 2007
+replace liberal1_st = cond(missing(민주통합당), 0, 민주통합당) if year == 2012
+replace liberal1_st = cond(missing(더불어민주당), 0, 더불어민주당) if inlist(year, 2017, 2022)
 
+* 보수
+gen conserv1_st = 0
+replace conserv1_st = cond(missing(한나라당), 0, 한나라당) if inlist(year, 1997, 2002, 2007)
+replace conserv1_st = cond(missing(새누리당), 0, 새누리당) if year == 2012
+replace conserv1_st = cond(missing(자유한국당), 0, 자유한국당) if year == 2017
+replace conserv1_st = cond(missing(국민의힘), 0, 국민의힘) if year == 2022
+*---------------------------------------------------------------------
+* 연도별 군소 정당 매핑
+*---------------------------------------------------------------------
+* 1997: 국민신당, 공화당, 바른정치연합 (보수), 건설국민승리 통일한국당(진보) 
+* 2002: 하나로국민연합(보수), 민주노동당(진보) // 호국당은 제외 
+* 2007: 무소속이회창(보수) // 창조한국당 제외 
+* 2012: 
+* 2017: 바른정당(보수), 정의당(진보) // 국민의당 제외 
+* 2022: 
+*---------------------------------------------------------------------
+* Version 2: 군소정당/무소속 포함
+*---------------------------------------------------------------------
 // 군소정당 포함 (정의당/바른정당, 이회창)
-gen liberal2_st = cond(missing(대통합민주신당), 0, 대통합민주신당) + cond(missing(민주통합당), 0, 민주통합당) + cond(missing(더불어민주당), 0, 더불어민주당) + cond(missing(정의당), 0, 정의당) 
+gen liberal2_st = liberal1_st
+gen conserv2_st = conserv1_st
 
-gen conserv2_st = cond(missing(한나라당), 0, 한나라당) + cond(missing(새누리당), 0, 새누리당) + cond(missing(자유한국당), 0, 자유한국당) +  cond(missing(국민의힘), 0, 국민의힘) +  cond(missing(무소속이회창), 0, 무소속이회창) +  cond(missing(바른정당), 0, 바른정당)
-******************************************************************
-// keep if year >=2012 
-///// 전체 유효투표수로 나누는 것이 아님 
-* Conservative two-party vote share 
-* = 보수 득표수 / (보수 득표수 + 진보 득표수)
+* 진보 군소정당 추가
+replace liberal2_st = liberal2_st + cond(missing(건설국민승리), 0, 건설국민승리) ///
+                                  + cond(missing(통일한국당), 0, 통일한국당) if year == 1997
+replace liberal2_st = liberal2_st + cond(missing(민주노동당), 0, 민주노동당) if year == 2002
+replace liberal2_st = liberal2_st + cond(missing(정의당), 0, 정의당) if year == 2017
+
+* 보수 군소정당 추가
+replace conserv2_st = conserv2_st + cond(missing(국민신당), 0, 국민신당) ///
+                                  + cond(missing(공화당), 0, 공화당) ///
+                                  + cond(missing(바른정치연합), 0, 바른정치연합) if year == 1997
+replace conserv2_st = conserv2_st + cond(missing(하나로국민연합), 0, 하나로국민연합) if year == 2002
+replace conserv2_st = conserv2_st + cond(missing(무소속이회창), 0, 무소속이회창) if year == 2007
+replace conserv2_st = conserv2_st + cond(missing(바른정당), 0, 바른정당) if year == 2017
+*---------------------------------------------------------------------
+* Vote Shares 계산
+*---------------------------------------------------------------------
 gen conserv1_p = conserv1_st / (conserv1_st + liberal1_st) 
 gen conserv2_p = conserv2_st / (conserv2_st + liberal2_st) 
-
-* Liberal two-party vote share
 gen liberal1_p = liberal1_st / (conserv1_st + liberal1_st)
-gen liberal2_p = liberal2_st / (conserv2_st + liberal2_st) 
+gen liberal2_p = liberal2_st / (conserv2_st + liberal2_st)
 
-// check 변수의 값이 모두 1이어야 함 
+* Check
 gen check = liberal1_p + conserv1_p
 tab check 
+assert abs(check - 1) < 0.0001 if !missing(check)
 
 gen check2 = liberal2_p + conserv2_p
-tab check2 
+tab check2
+assert abs(check2 - 1) < 0.0001 if !missing(check2)
 
-drop check check2 
+drop check check2
 ************************************************************************
 //// Turnout in percentage of registered votes 
 gen turnout = 투표수 / 선거인수
@@ -119,11 +167,11 @@ foreach yr in 2007 2012 2017 2022 {
 *---------------------------------------------------------------------
 * Long Difference ver1) 2007→2022 (t0=2007 행에 저장)
 *---------------------------------------------------------------------
-gen LD_conserv1_p_0722 = conserv1_p_2022 - conserv1_p_2007 
-gen LD_conserv2_p_0722 = conserv2_p_2022 - conserv2_p_2007 
-gen LD_liberal1_p_0722 = liberal1_p_2022 - liberal1_p_2007 
-gen LD_liberal2_p_0722 = liberal2_p_2022 - liberal2_p_2007 
-gen LD_turnout_0722    = turnout_2022    - turnout_2007    
+gen LD_conserv1_p_0722 = conserv1_p_2022 - conserv1_p_2007 if year == 2007
+gen LD_conserv2_p_0722 = conserv2_p_2022 - conserv2_p_2007 if year == 2007
+gen LD_liberal1_p_0722 = liberal1_p_2022 - liberal1_p_2007 if year == 2007
+gen LD_liberal2_p_0722 = liberal2_p_2022 - liberal2_p_2007 if year == 2007
+gen LD_turnout_0722    = turnout_2022    - turnout_2007     if year == 2007
 
 label variable LD_conserv1_p_0722 "LD conserv1_p (2007→2022), t0=2007"
 label variable LD_conserv2_p_0722 "LD conserv2_p (2007→2022), t0=2007"
@@ -132,11 +180,11 @@ label variable LD_turnout_0722    "LD turnout (2007→2022), t0=2007"
 *---------------------------------------------------------------------
 * Long Difference ver2) 2012→2022 (t0=2012 행에 저장)
 *---------------------------------------------------------------------
-gen LD_conserv1_p_1222 = conserv1_p_2022 - conserv1_p_2012 
-gen LD_conserv2_p_1222 = conserv2_p_2022 - conserv2_p_2012 
-gen LD_liberal1_p_1222 = liberal1_p_2022 - liberal1_p_2012 
-gen LD_liberal2_p_1222 = liberal2_p_2022 - liberal2_p_2012
-gen LD_turnout_1222    = turnout_2022    - turnout_2012   
+gen LD_conserv1_p_1222 = conserv1_p_2022 - conserv1_p_2012 if year == 2012
+gen LD_conserv2_p_1222 = conserv2_p_2022 - conserv2_p_2012 if year == 2012
+gen LD_liberal1_p_1222 = liberal1_p_2022 - liberal1_p_2012 if year == 2012
+gen LD_liberal2_p_1222 = liberal2_p_2022 - liberal2_p_2012 if year == 2012
+gen LD_turnout_1222    = turnout_2022    - turnout_2012     if year == 2012
 
 label variable LD_conserv1_p_1222 "LD conserv1_p (2012→2022), t0=2012"
 label variable LD_conserv2_p_1222 "LD conserv2_p (2012→2022), t0=2012"
@@ -212,11 +260,54 @@ gen dum_competitive2 = (dum_solid_lib2 == 0 & dum_solid_con2 == 0)
 
 * 확인, 아래의 해당하는 관측치 있으면 안됨 
 count if dum_solid_lib2==1 & dum_solid_con2==1
-********************************************************* 
-drop 선거인수 투표수 유효투표수 무효투표 기권 대통합민주신당 한나라당 창조한국당 무소속이회창 새누리당 민주통합당 더불어민주당 자유한국당 국민의당 바른정당 정의당 국민의힘
+*---------------------------------------------------------------------
+* 2002, 2007년 값 저장
+*---------------------------------------------------------------------
+foreach yr in 2002 2007 {
+    preserve
+    keep if year == `yr'
+    keep regioncode conserv1_p conserv2_p turnout
+    foreach var in conserv1_p conserv2_p turnout {
+        rename `var' `var'_pre`yr'
+    }
+    tempfile basepre`yr'
+    save `basepre`yr''
+    restore
+    merge m:1 regioncode using `basepre`yr'', nogen
+}
 
-compress 
+*---------------------------------------------------------------------
+* Pretrend -  Difference (2002→2007)
+*---------------------------------------------------------------------
+**** ! 주의: pretrend 변수만 baseline yaer 말고 2007년도에 저장 (merge 위해서)
+gen D_conserv1_p_0207 = conserv1_p_pre2007 - conserv1_p_pre2002 if year == 2007
+gen D_conserv2_p_0207 = conserv2_p_pre2007 - conserv2_p_pre2002 if year == 2007
+gen D_turnout_0207    = turnout_pre2007    - turnout_pre2002    if year == 2007
 
-keep sido_nm sigungu_nm year countyid regioncode LD_conserv1_p_0722 LD_conserv2_p_0722 LD_turnout_0722 LD_conserv1_p_1222 LD_conserv2_p_1222 LD_turnout_1222 SD_conserv1_p SD_conserv2_p SD_turnout dum_solid_lib1 dum_solid_con1 dum_competitive1 dum_solid_lib2 dum_solid_con2 dum_competitive2
+label variable D_conserv1_p_0207 "ΔConservative (2002→2007, pretrend)"
+label variable D_conserv2_p_0207 "ΔConservative v2 (2002→2007, pretrend)"
+label variable D_turnout_0207    "ΔTurnout (2002→2007, pretrend)"
+
+**********************************************************************
+* 정리 & 저장
+**********************************************************************
+* 임시 변수 정리
+drop conserv1_p_2007-turnout_2022 ///
+     conserv1_p_pre2002-turnout_pre2007 ///
+     lib1_over55 con1_over55 lib2_over55 con2_over55 ///
+     solid_lib1 solid_con1 solid_lib2 solid_con2
+
+* 원본 정당 변수 정리
+drop 선거인수 투표수 유효투표수 무효투표 기권 ///
+     한나라당 새정치국민회의 국민신당 건설국민승리 공화당 바른정치연합 통일한국당 ///
+     새천년민주당 하나로국민연합 민주노동당 호국당 ///
+     대통합민주신당 창조한국당 무소속이회창 ///
+     새누리당 민주통합당 ///
+     더불어민주당 자유한국당 국민의당 바른정당 정의당 국민의힘 ///
+     liberal1_st liberal2_st conserv1_st conserv2_st ///
+     liberal1_p liberal2_p conserv1_p conserv2_p turnout
+
+compress
+sort year regioncode
 
 save "$data/Y_final.dta", replace 

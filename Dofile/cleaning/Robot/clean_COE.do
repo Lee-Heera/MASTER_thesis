@@ -74,7 +74,7 @@ label variable emp_ijt "All employment in region i, industry j, year t"
 * 지역-산업별 특정 연도 고용 (emp_i,j,특정연도)
 **********************************************************************
 
-foreach yr in 1995 2005 2007 2010 2012 {
+foreach yr in 1995 2005 2007 2010 2012 2017 {
     bysort regioncode newindcode: egen emp_ij`yr' = total(emp_ijt * (year == `yr'))
     label variable emp_ij`yr' "Employment in region i, industry j, year `yr'"
 }
@@ -89,7 +89,7 @@ label variable emp_it "Total employment in region i, year t"
 **********************************************************************
 * 지역별 특정연도 총 고용 (emp_i,특정연도)
 **********************************************************************
-foreach yr in 1995 2005 2007 2010 2012 {
+foreach yr in 1995 2005 2007 2010 2012 2017 {
     bysort regioncode: egen emp_i`yr' = total(emp_ijt * (year == `yr'))
     label variable emp_i`yr' "Total employment in region i, year `yr'"
 }
@@ -102,7 +102,7 @@ label variable emp_jt "Total employment in industry j, year t"
 **********************************************************************
 * 산업별 특정 연도 총 고용 (emp_j,t*) - 표준화용
 **********************************************************************
-foreach yr in 1995 2005 2007 2010 2012 {
+foreach yr in 1995 2005 2007 2010 2012 2017 {
     bysort newindcode: egen emp_j`yr' = total(emp_ijt * (year == `yr'))
     label variable emp_j`yr' "Total employment in industry j, year `yr'"
 }
@@ -149,6 +149,13 @@ br if missing(emp_ij2012) // 없음
 br if emp_i2012==0  // 없음 
 gen share12 = emp_ij2012 / emp_i2012
 label variable share12 "Employment share (2012 base): emp_ij2012 / emp_i2012"
+
+**********
+br if missing(emp_i2017) // 없음 
+br if missing(emp_ij2017) // 없음 
+br if emp_i2017==0  // 없음 
+gen share17 = emp_ij2017 / emp_i2017
+label variable share17 "Employment share (2017 base): emp_ij2017 / emp_i2017"
 
 *******************************************************************************
 ** share95 후처리 

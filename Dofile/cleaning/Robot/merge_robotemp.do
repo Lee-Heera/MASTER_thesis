@@ -120,13 +120,17 @@ compress
 *---------------------------------------------------------------------
 * X: share05 × (LD_kr_0722 / emp_j2005)
 gen X_ij_LD0722 = share05 * (LD_opstock_kr_0722 / emp_j2005)
-bysort regioncode year: egen X_LD0722 = total(X_ij_LD0722)
+bysort regioncode year: egen X_LD0722_all = total(X_ij_LD0722)
+gen X_LD0722 = X_LD0722_all if year == 2007
 label variable X_LD0722 "Bartik X: LD 2007-2022 (share05, emp_j2005)"
+drop X_LD0722_all
 
 * IV: share95 × (LD_sg_0722 / sgp_empj2005)
 gen Z_ij_LD0722 = share95 * (LD_opstock_sg_0722 / sgp_empj2005)
-bysort regioncode year: egen Z_LD0722 = total(Z_ij_LD0722)
+bysort regioncode year: egen Z_LD0722_all = total(Z_ij_LD0722)
+gen Z_LD0722 = Z_LD0722_all if year == 2007
 label variable Z_LD0722 "Bartik IV: LD 2007-2022 (share95, sgp_empj2005)"
+drop Z_LD0722_all
 
 drop X_ij_LD0722 Z_ij_LD0722
 
@@ -135,13 +139,17 @@ drop X_ij_LD0722 Z_ij_LD0722
 *---------------------------------------------------------------------
 * X
 gen X_ij_LD1222 = share05 * (LD_opstock_kr_1222 / emp_j2005)
-bysort regioncode year: egen X_LD1222 = total(X_ij_LD1222)
+bysort regioncode year: egen X_LD1222_all = total(X_ij_LD1222)
+gen X_LD1222 = X_LD1222_all if year == 2012
 label variable X_LD1222 "Bartik X: LD 2012-2022 (share05, emp_j2005)"
+drop X_LD1222_all
 
 * IV
 gen Z_ij_LD1222 = share95 * (LD_opstock_sg_1222 / sgp_empj2005)
-bysort regioncode year: egen Z_LD1222 = total(Z_ij_LD1222)
+bysort regioncode year: egen Z_LD1222_all = total(Z_ij_LD1222)
+gen Z_LD1222 = Z_LD1222_all if year == 2012
 label variable Z_LD1222 "Bartik IV: LD 2012-2022 (share95, sgp_empj2005)"
+drop Z_LD1222_all
 
 drop X_ij_LD1222 Z_ij_LD1222
 
@@ -150,17 +158,26 @@ drop X_ij_LD1222 Z_ij_LD1222
 *---------------------------------------------------------------------
 * X
 gen X_ij_SD = share05 * (SD_opstock_kr / emp_j2005)
-bysort regioncode year: egen X_SD = total(X_ij_SD) 
-replace X_SD = . if year == 2022   // 2022년도는 endpoint 라서 수동으로 missing 처리 
+bysort regioncode year: egen X_SD_all = total(X_ij_SD)
+gen X_SD = X_SD_all if inlist(year, 2007, 2012, 2017)
+drop X_SD_all
 label variable X_SD "Bartik X: SD (share05, emp_j2005)"
 
 * IV
 gen Z_ij_SD = share95 * (SD_opstock_sg / sgp_empj2005)
-bysort regioncode year: egen Z_SD = total(Z_ij_SD)
-replace Z_SD = . if year == 2022    // 2022년도는 endpoint 라서 수동으로 missing 처리  
+bysort regioncode year: egen Z_SD_all = total(Z_ij_SD)
+gen Z_SD = Z_SD_all if inlist(year, 2007, 2012, 2017)
+drop Z_SD_all
 label variable Z_SD "Bartik IV: SD (share95, sgp_empj2005)"
 
-
+*---------------------------------------------------------------------
+* 검증
+*---------------------------------------------------------------------
+sum X_LD0722 if year == 2007   // 값 있어야 함 ✅
+sum X_LD0722 if year == 2012   // missing이어야 함 ✅
+sum X_LD1222 if year == 2012   // 값 있어야 함 ✅
+sum X_LD1222 if year == 2007   // missing이어야 함 ✅
+sum X_SD if year == 2022       // missing이어야 함 ✅
 
 sort year regioncode newindcode
  
@@ -169,5 +186,10 @@ keep year regioncode sido_nm sigungu_nm SDperiod ///
 
 duplicates drop year regioncode, force
 isid year regioncode  // unique해야 함 
+
+drop if sido_nm=="세종특별자치시" 
+drop if sido_nm=="제주특별자치도" 
+
+tab year 
 
 save "$data/X_final.dta", replace
