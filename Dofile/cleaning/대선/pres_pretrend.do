@@ -28,19 +28,45 @@ global SD aged_share_SD college_share_SD
 **** pretrend check 
 est clear 
 
-reg D_conserv1_p_0207 X_SD $SD , cluster(regioncode)
+reg D_turnout_0207 X_SD $SD, ///
+    cluster(regioncode)
 est store pre1
+
+reg D_conserv1_p_0207 X_SD $SD , cluster(regioncode)
+est store pre2
 
 reg D_conserv2_p_0207 X_SD $SD, ///
     cluster(regioncode)
-est store pre2
-	
-reg D_turnout_0207 X_SD $SD, ///
-    cluster(regioncode)
 est store pre3
-
+	
 esttab pre* , nogap stats(N widstat arf arfp) r2(%8.3f) b(%8.3f) se(%8.3f) label star(* 0.10 ** 0.05 *** 0.01) 
 
+***** Singapore exposure 
+est clear 
+
+reg D_turnout_0207 Z_SD  
+est store pre1
+reg D_conserv1_p_0207 Z_SD 
+est store pre2
+reg D_conserv2_p_0207 Z_SD
+est store pre3
+
+reg D_turnout_0207 Z_SD , cluster(regioncode)
+est store pre4
+reg D_conserv1_p_0207 Z_SD , cluster(regioncode)
+est store pre5
+reg D_conserv2_p_0207 Z_SD , cluster(regioncode)
+est store pre6
+
+reg D_turnout_0207 Z_SD $SD , cluster(regioncode)
+est store pre7
+reg D_conserv1_p_0207 Z_SD $SD, cluster(regioncode)
+est store pre8
+reg D_conserv2_p_0207 Z_SD $SD, cluster(regioncode)
+est store pre9
+	
+
+esttab pre* , nogap stats(N r2 widstat arf arfp) r2(%8.3f) b(%8.3f) se(%8.3f) label star(* 0.10 ** 0.05 *** 0.01) 
 *****************************************************************************
 ******************** Figure ******************** 
 reg D_conserv1_p_0207 X_SD $SD , cluster(regioncode)
