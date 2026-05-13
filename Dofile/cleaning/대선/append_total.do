@@ -178,17 +178,17 @@ label variable LD_conserv2_p_0722 "LD conserv2_p (2007→2022), t0=2007"
 label variable LD_turnout_0722    "LD turnout (2007→2022), t0=2007"
 
 *---------------------------------------------------------------------
-* Long Difference ver2) 2012→2022 (t0=2012 행에 저장)
+* Long Difference ver2) 2007→2017 (t0=2007 행에 저장)  ← 변경됨
 *---------------------------------------------------------------------
-gen LD_conserv1_p_1222 = conserv1_p_2022 - conserv1_p_2012 if year == 2012
-gen LD_conserv2_p_1222 = conserv2_p_2022 - conserv2_p_2012 if year == 2012
-gen LD_liberal1_p_1222 = liberal1_p_2022 - liberal1_p_2012 if year == 2012
-gen LD_liberal2_p_1222 = liberal2_p_2022 - liberal2_p_2012 if year == 2012
-gen LD_turnout_1222    = turnout_2022    - turnout_2012     if year == 2012
+gen LD_conserv1_p_0717 = conserv1_p_2017 - conserv1_p_2007 if year == 2007  // ← 변경
+gen LD_conserv2_p_0717 = conserv2_p_2017 - conserv2_p_2007 if year == 2007  // ← 변경
+gen LD_liberal1_p_0717 = liberal1_p_2017 - liberal1_p_2007 if year == 2007  // ← 변경
+gen LD_liberal2_p_0717 = liberal2_p_2017 - liberal2_p_2007 if year == 2007  // ← 변경
+gen LD_turnout_0717    = turnout_2017    - turnout_2007     if year == 2007  // ← 변경
 
-label variable LD_conserv1_p_1222 "LD conserv1_p (2012→2022), t0=2012"
-label variable LD_conserv2_p_1222 "LD conserv2_p (2012→2022), t0=2012"
-label variable LD_turnout_1222    "LD turnout (2012→2022), t0=2012"
+label variable LD_conserv1_p_0717 "LD conserv1_p (2007→2017), t0=2007"  // ← 변경
+label variable LD_conserv2_p_0717 "LD conserv2_p (2007→2017), t0=2007"  // ← 변경
+label variable LD_turnout_0717    "LD turnout (2007→2017), t0=2007"  // ← 변경
 
 *---------------------------------------------------------------------
 * Stacked Difference (t0 행에 저장)
