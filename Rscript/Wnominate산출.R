@@ -429,8 +429,7 @@ coords_22_1d <- coords_22_1d %>%
     by = "MONA_CD"
   )
 
-# 전체 통합 (다시)
-coords_all <- bind_rows(coords_20_1d, coords_21_1d, coords_22_1d)
+
 
 #################### 공백 기준으로 시도/선거구 분리 ######################
 
@@ -565,12 +564,18 @@ coords_22_1d <- coords_22_1d %>%
     DUM_DISTRICT = if_else(!is.na(DISTRICT_TYPE), 1, 0, missing = 0)
   )
 
+coords_all <- bind_rows(coords_20_1d, coords_21_1d, coords_22_1d)
+
 saveRDS (coords_20_1d, "20대국회_wnominate_1차원")
 saveRDS (coords_21_1d, "21대국회_wnominate_1차원")
 saveRDS (coords_22_1d, "22대국회_wnominate_1차원")
+saveRDS (coords_all, "20-22대국회_wnominate_1차원")
 
 
 library(haven)
 write_dta(coords_20_1d, "20대국회_wnominate_1차원.dta")
 write_dta(coords_21_1d, "21대국회_wnominate_1차원.dta")
 write_dta(coords_22_1d, "22대국회_wnominate_1차원.dta")
+write_dta (coords_all, "20-22대국회_wnominate_1차원.dta")
+
+
