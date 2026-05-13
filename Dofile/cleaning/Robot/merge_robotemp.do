@@ -72,12 +72,12 @@ label variable LD_opstock_kr_0722 "Korea: LD Δop_stock (2007→2022)"
 label variable LD_opstock_sg_0722 "Singapore: LD Δop_stock (2007→2022)"
 
 *---------------------------------------------------------------------
-* Long Difference ver2) 2012~2022
+* Long Difference ver2) 2007-2017 
 *---------------------------------------------------------------------
-gen LD_opstock_kr_1222 = opstock_kr_2022 - opstock_kr_2012
-gen LD_opstock_sg_1222 = opstock_sg_2022 - opstock_sg_2012
-label variable LD_opstock_kr_1222 "Korea: LD Δop_stock (2012→2022)"
-label variable LD_opstock_sg_1222 "Singapore: LD Δop_stock (2012→2022)"
+gen LD_opstock_kr_0717 = opstock_kr_2017 - opstock_kr_2007  // ← 2012→2017을 2007→2017로 변경
+gen LD_opstock_sg_0717 = opstock_sg_2017 - opstock_sg_2007  // ← 2012→2017을 2007→2017로 변경
+label variable LD_opstock_kr_0717 "Korea: LD Δop_stock (2007→2017)"  // ← 라벨 변경
+label variable LD_opstock_sg_0717 "Singapore: LD Δop_stock (2007→2017)"  // ← 라벨 변경
 
 *---------------------------------------------------------------------
 * Stacked Difference (t0 = year)
@@ -135,23 +135,23 @@ drop Z_LD0722_all
 drop X_ij_LD0722 Z_ij_LD0722
 
 *---------------------------------------------------------------------
-* Long Difference ver2) 2012~2022
+* Long Difference ver2) 2007-2017
 *---------------------------------------------------------------------
 * X
-gen X_ij_LD1222 = share05 * (LD_opstock_kr_1222 / emp_j2005)
-bysort regioncode year: egen X_LD1222_all = total(X_ij_LD1222)
-gen X_LD1222 = X_LD1222_all if year == 2012
-label variable X_LD1222 "Bartik X: LD 2012-2022 (share05, emp_j2005)"
-drop X_LD1222_all
+gen X_ij_LD0717 = share05 * (LD_opstock_kr_0717 / emp_j2005)  // ← 변수명 변경
+bysort regioncode year: egen X_LD0717_all = total(X_ij_LD0717)  // ← 변수명 변경
+gen X_LD0717 = X_LD0717_all if year == 2007  // ← year == 2012를 2007로 변경
+label variable X_LD0717 "Bartik X: LD 2007-2017 (share05, emp_j2005)"  // ← 라벨 변경
+drop X_LD0717_all
 
 * IV
-gen Z_ij_LD1222 = share95 * (LD_opstock_sg_1222 / sgp_empj2005)
-bysort regioncode year: egen Z_LD1222_all = total(Z_ij_LD1222)
-gen Z_LD1222 = Z_LD1222_all if year == 2012
-label variable Z_LD1222 "Bartik IV: LD 2012-2022 (share95, sgp_empj2005)"
-drop Z_LD1222_all
+gen Z_ij_LD0717 = share95 * (LD_opstock_sg_0717 / sgp_empj2005)  // ← 변수명 변경
+bysort regioncode year: egen Z_LD0717_all = total(Z_ij_LD0717)  // ← 변수명 변경
+gen Z_LD0717 = Z_LD0717_all if year == 2007  // ← year == 2012를 2007로 변경
+label variable Z_LD0717 "Bartik IV: LD 2007-2017 (share95, sgp_empj2005)"  // ← 라벨 변경
+drop Z_LD0717_all
 
-drop X_ij_LD1222 Z_ij_LD1222
+drop X_ij_LD0717 Z_ij_LD0717  
 
 *---------------------------------------------------------------------
 * Stacked Difference
@@ -175,14 +175,13 @@ label variable Z_SD "Bartik IV: SD (share95, sgp_empj2005)"
 *---------------------------------------------------------------------
 sum X_LD0722 if year == 2007   // 값 있어야 함 ✅
 sum X_LD0722 if year == 2012   // missing이어야 함 ✅
-sum X_LD1222 if year == 2012   // 값 있어야 함 ✅
-sum X_LD1222 if year == 2007   // missing이어야 함 ✅
+sum X_LD0717 if year == 2007   // 값 있어야 함 ✅  ← 변경됨
+sum X_LD0717 if year == 2012   // missing이어야 함 ✅  ← 변경됨
 sum X_SD if year == 2022       // missing이어야 함 ✅
-
 sort year regioncode newindcode
  
 keep year regioncode sido_nm sigungu_nm SDperiod ///
-     X_LD0722 Z_LD0722 X_LD1222 Z_LD1222 X_SD Z_SD
+     X_LD0722 Z_LD0722 X_LD0717 Z_LD0717 X_SD Z_SD  // 
 
 duplicates drop year regioncode, force
 isid year regioncode  // unique해야 함 
