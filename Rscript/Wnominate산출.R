@@ -21,10 +21,10 @@ library(writexl)
 library(dplyr)
 
 .libPaths()
-setwd("/Users/ihuila/Desktop/data/master thesis/aftercongroll")
+setwd("/Users/ihuila/Research/MASTER_thesis/Data interim/국회_본회의표결") 
 
-roll_raw <- readRDS("/Users/ihuila/Desktop/data/master thesis/raw/CongRoll/rollcall_최종.rds")
-poli_raw <- readRDS("/Users/ihuila/Desktop/data/master thesis/raw/CongRoll/국회의원 정보 통합.rds")
+roll_raw <- readRDS("/Users/ihuila/Research/MASTER_thesis/Data raw/국회_본회의표결/rollcall_최종.rds")
+poli_raw <- readRDS("/Users/ihuila/Research/MASTER_thesis/Data raw/국회_본회의표결/국회의원 정보 통합.rds")
 #################### STEP 0: roll + poli 데이터 머지, 클리닝 ######################
 # poli_raw 클리닝 (대수별 분리)
 poli_clean <- poli_raw %>%
@@ -170,7 +170,6 @@ roll_poli_merged <- roll_raw %>%
     by = c("MONA_CD", "AGE")
   ) #2,382,958
 
-
 # roll_poli_merged 정당 분류 확인 
 roll_poli_merged %>% distinct(POLY_NM) # 23개의 정당 
 
@@ -229,36 +228,6 @@ roll_poli_merged %>%
 
 # 단축키 cmd+shift+c
 
-# # 대수별 현황
-# cat("\n=== 대수별 현황 ===\n")
-# initial_summary <- roll_poli_merged %>%
-#   group_by(AGE) %>%
-#   summarise(
-#     의안수 = n_distinct(BILL_ID),
-#     의원수 = n_distinct(MONA_CD),
-#     투표수 = n(),
-#     .groups = "drop"
-#   )
-# print(initial_summary) 
-# 
-# # 투표 결과별 분포
-# cat("\n=== 투표 결과 분포 ===\n")
-# vote_distribution <- roll_poli_merged %>%
-#   count(RESULT_VOTE_MOD) %>%
-#   mutate(비율 = n / sum(n) * 100) %>%
-#   arrange(desc(n))
-# print(vote_distribution) # 불참, 기권 포함 
-# 
-# # 대수별 투표 결과 분포
-# cat("\n=== 대수별 투표 결과 분포 ===\n")
-# vote_dist_by_age <- roll_poli_merged %>%
-#   group_by(AGE, RESULT_VOTE_MOD) %>%
-#   summarise(n = n(), .groups = "drop") %>%
-#   group_by(AGE) %>%
-#   mutate(비율 = n / sum(n) * 100) %>%
-#   arrange(AGE, desc(n))
-# print(vote_dist_by_age)
-
 saveRDS(roll_poli_merged, "본회의표결_국회의원통합_분석용최종.rds")
 
 #################### Step 1: 데이터 탐색 ######################
@@ -285,24 +254,6 @@ roll_poli_merged %>%
 # 20대: 254개 
 # 21대 308개 
 # 22대: 140개 
- 
-#################### Step 2: bridge 의원 확인 ######################
-bridge_analysis <- roll_poli_merged %>%
-  group_by(MONA_CD) %>%
-  summarise(
-    활동대수 = n_distinct(AGE),
-    이름 = first(HG_NM),
-    정당들 = paste(unique(PARTY_MAJOR), collapse = "/"),
-    .groups = "drop"
-  ) %>%
-  arrange(desc(활동대수))
-
-bridge_analysis %>%
-  count(활동대수) %>%
-  print()
-
-bridge_3term <- bridge_analysis %>% filter(활동대수 == 3)
-cat(sprintf("\n3선 Bridge: %d명\n\n", nrow(bridge_3term))) # 3선의원 68명 
 
 #################### Step 3: W-nominate score 
 #################### Step 4: Rollcall 객체 생성 (필터링 없이) ######################
@@ -397,49 +348,6 @@ plot(result_20_1d, main.title = "제20대 국회 W-NOMINATE (1차원)")
 # 1차원 결과 확인
 coords_20_1d <- result_20_1d$legislators
 
-# # MONA_CD가 rownames인 경우
-# if(!"MONA_CD" %in% colnames(coords_20_1d)) {
-#   coords_20_1d <- coords_20_1d %>%
-#     as_tibble(rownames = "MONA_CD")
-# }
-# 
-# # 정당 정보 병합
-# coords_20_1d <- coords_20_1d %>%
-#   left_join(
-#     roll_recoded %>% filter(AGE == 20) %>% 
-#       distinct(MONA_CD, HG_NM, PARTY_MAJOR, PARTY_IDEOLOGY),
-#     by = "MONA_CD"
-#   )
-# 
-# # 20대 국회 - 2차원 
-# # 보수 정당에서 1명
-# polarity_conservative <- roll_recoded %>%
-#   filter(PARTY_IDEOLOGY == "Conservative", AGE == 20) %>%
-#   distinct(MONA_CD, HG_NM) %>%
-#   slice_sample(n = 1) %>%
-#   pull(MONA_CD)
-# 
-# # 진보 정당에서 1명
-# polarity_liberal <- roll_recoded %>%
-#   filter(PARTY_IDEOLOGY == "Liberal", AGE == 20) %>%
-#   distinct(MONA_CD, HG_NM) %>%
-#   slice_sample(n = 1) %>%
-#   pull(MONA_CD)
-# 
-# # 20대 국회 2차원 wnominate score 
-# result_20_2d <- wnominate(
-#   rc_list[["20"]],
-#   dims = 2,
-#   polarity = c(polarity_conservative, polarity_liberal),
-#   minvotes = 25,
-#   lop = 0.025,
-#   trials = 3,
-#   verbose = FALSE
-# )
-# 
-# print(summary(result_20_2d))
-# 
-# plot(result_20_2d, main.title = "제20대 국회 W-NOMINATE (2차원)")
 #################### Analysis: 21대 국회 w-nominate  #########
 # 21대 국회 1차원 polarity 설정 - 주호영 의원 
 roll_recoded %>%
@@ -462,50 +370,6 @@ print(summary(result_21_1d))
 plot(result_21_1d, main.title = "제21대 국회 W-NOMINATE (1차원)")
 
 coords_21_1d <- result_21_1d$legislators
-# 
-# # MONA_CD가 rownames인 경우
-# if(!"MONA_CD" %in% colnames(coords_21_1d)) {
-#   coords_21_1d <- coords_21_1d %>%
-#     as_tibble(rownames = "MONA_CD")
-# }
-# 
-# # 정당 정보 병합
-# coords_21_1d <- coords_21_1d %>%
-#   left_join(
-#     roll_recoded %>% filter(AGE == 21) %>% 
-#       distinct(MONA_CD, HG_NM, PARTY_MAJOR, PARTY_IDEOLOGY),
-#     by = "MONA_CD"
-#   )
-# 
-# # 21대 국회 - 2차원 
-# # 보수 정당에서 1명
-# polarity_conservative_21 <- roll_recoded %>%
-#   filter(PARTY_IDEOLOGY == "Conservative", AGE == 21) %>%
-#   distinct(MONA_CD, HG_NM) %>%
-#   slice_sample(n = 1) %>%
-#   pull(MONA_CD)
-# 
-# # 진보 정당에서 1명
-# polarity_liberal_21 <- roll_recoded %>%
-#   filter(PARTY_IDEOLOGY == "Liberal", AGE == 21) %>%
-#   distinct(MONA_CD, HG_NM) %>%
-#   slice_sample(n = 1) %>%
-#   pull(MONA_CD)
-# 
-# # 21대 국회 2차원 wnominate score 
-# result_21_2d <- wnominate(
-#   rc_list[["21"]],
-#   dims = 2,
-#   polarity = c(polarity_conservative_21, polarity_liberal_21),
-#   minvotes = 25,
-#   lop = 0.025,
-#   trials = 3,
-#   verbose = FALSE
-# )
-# 
-# print(summary(result_21_2d))
-# plot(result_21_2d, main.title = "제21대 국회 W-NOMINATE (2차원)")
-
 
 #################### Analysis: 22대 국회 w-nominate  #########
 ## 22대 국회 1차원 Polarity 설정 - 권성동 
@@ -532,51 +396,181 @@ plot(result_22_1d, main.title = "제22대 국회 W-NOMINATE (1차원)")
 
 # 1차원 결과 확인
 coords_22_1d <- result_22_1d$legislators
-
-# # MONA_CD가 rownames인 경우
-# if(!"MONA_CD" %in% colnames(coords_22_1d)) {
-#   coords_22_1d <- coords_22_1d %>%
-#     as_tibble(rownames = "MONA_CD")
-# }
-# 
-# # 정당 정보 병합
-# coords_22_1d <- coords_22_1d %>%
-#   left_join(
-#     roll_recoded %>% filter(AGE == 22) %>% 
-#       distinct(MONA_CD, HG_NM, PARTY_MAJOR, PARTY_IDEOLOGY),
-#     by = "MONA_CD"
-#   )
-# 
-# # 22대 국회 - 2차원 
-# # 보수 정당에서 1명
-# polarity_conservative_22 <- roll_recoded %>%
-#   filter(PARTY_IDEOLOGY == "Conservative", AGE == 22) %>%
-#   distinct(MONA_CD, HG_NM) %>%
-#   slice_sample(n = 1) %>%
-#   pull(MONA_CD)
-# 
-# # 진보 정당에서 1명
-# polarity_liberal_22 <- roll_recoded %>%
-#   filter(PARTY_IDEOLOGY == "Liberal", AGE == 22) %>%
-#   distinct(MONA_CD, HG_NM) %>%
-#   slice_sample(n = 1) %>%
-#   pull(MONA_CD)
-# 
-# # 22대 국회 2차원 wnominate score 
-# result_22_2d <- wnominate(
-#   rc_list[["22"]],
-#   dims = 2,
-#   polarity = c(polarity_conservative_22, polarity_liberal_22),
-#   minvotes = 25,
-#   lop = 0.025,
-#   trials = 3,
-#   verbose = FALSE
-# )
-# 
-# print(summary(result_22_2d))
-# plot(result_22_2d, main.title = "제22대 국회 W-NOMINATE (2차원)")
-
 #################### 전체 결과 저장 ######################
-saveRDS (result_20_1d, "20대국회_wnominate_1차원")
-saveRDS (result_21_1d, "21대국회_wnominate_1차원")
-saveRDS (result_22_1d, "22대국회_wnominate_1차원")
+# saveRDS (coords_20_1d, "20대국회_wnominate_1차원")
+# saveRDS (coords_21_1d, "21대국회_wnominate_1차원")
+# saveRDS (coords_22_1d, "22대국회_wnominate_1차원")
+############################## 결과 데이터 정리#######################################
+# 선거구 머지.roll_raw 데이터에 있는 (ORIG_CD, ORIG_NM) / 정당코드 (POLY_CD) 를 각 coords_20_1d, coords_21_1d, coords_22_1d 에 있는 데이터에 붙이기 
+# 20대 국회 - ORIG_NM 추가
+coords_20_1d <- coords_20_1d %>%
+  left_join(
+    roll_raw %>%
+      filter(AGE == 20) %>%
+      distinct(MONA_CD, ORIG_NM, ORIG_CD, POLY_CD),
+    by = "MONA_CD"
+  )
+
+# 21대 국회 - ORIG_NM 추가
+coords_21_1d <- coords_21_1d %>%
+  left_join(
+    roll_raw %>%
+      filter(AGE == 21) %>%
+      distinct(MONA_CD, ORIG_NM, ORIG_CD, POLY_CD),
+    by = "MONA_CD"
+  )
+
+# 22대 국회 - ORIG_NM 추가
+coords_22_1d <- coords_22_1d %>%
+  left_join(
+    roll_raw %>%
+      filter(AGE == 22) %>%
+      distinct(MONA_CD, ORIG_NM, ORIG_CD, POLY_CD),
+    by = "MONA_CD"
+  )
+
+# 전체 통합 (다시)
+coords_all <- bind_rows(coords_20_1d, coords_21_1d, coords_22_1d)
+
+#################### 공백 기준으로 시도/선거구 분리 ######################
+
+# coords_20_1d
+coords_20_1d <- coords_20_1d %>%
+  mutate(
+    # 공백이 있으면 분리, 없으면 전체를 SIDO_NM에
+    SIDO_NM = if_else(
+      str_detect(ORIG_NM, "\\s"),                    # 공백 있는지 확인
+      str_extract(ORIG_NM, "^[^\\s]+"),              # 공백 앞부분
+      ORIG_NM                                       # 공백 없으면 전체
+    ),
+    
+    SIGUNGU_NM = if_else(
+      str_detect(ORIG_NM, "\\s"),                    # 공백 있는지 확인
+      str_extract(ORIG_NM, "(?<=\\s).+"),            # 공백 뒷부분
+      NA_character_                                    # 공백 없으면 NA
+    )
+  )
+
+coords_20_1d <- coords_20_1d %>%
+  mutate(
+    # 1. 갑/을/병/정 추출
+    DISTRICT_TYPE = str_extract(SIGUNGU_NM, "(갑|을|병|정)$"),
+    
+    # 2. 복합도농 여부 (시/군/구가 2개 이상, 단 "~시~구" 패턴은 제외)
+    IS_COMPLEX = str_detect(SIGUNGU_NM, "(시|군|구).+(시|군|구)") & 
+      !str_detect(SIGUNGU_NM, "시.+구(갑|을|병|정)?$"),
+    
+    # 3. SIGUNGU_NM2 생성
+    SIGUNGU_NM2 = case_when(
+      # 복합도농이면 그대로
+      IS_COMPLEX == TRUE ~ SIGUNGU_NM,
+      
+      # 갑/을/병/정이 있으면 제거
+      # "성남시분당구갑" → "성남시분당구"
+      # "해운대구갑" → "해운대구"
+      !is.na(DISTRICT_TYPE) ~ str_remove(SIGUNGU_NM, "(갑|을|병|정)$"),
+      
+      # 나머지는 그대로
+      TRUE ~ SIGUNGU_NM
+    ),
+    
+    # 4. 더미 변수들
+    DUM_COMPLEX = if_else(IS_COMPLEX, 1, 0, missing = 0),           # 복합도농 더미
+    DUM_GAP = if_else(DISTRICT_TYPE == "갑", 1, 0, missing = 0),     # 갑 더미
+    DUM_EUL = if_else(DISTRICT_TYPE == "을", 1, 0, missing = 0),     # 을 더미
+    DUM_BYEONG = if_else(DISTRICT_TYPE == "병", 1, 0, missing = 0),  # 병 더미
+    DUM_JEONG = if_else(DISTRICT_TYPE == "정", 1, 0, missing = 0),   # 정 더미
+    DUM_DISTRICT = if_else(!is.na(DISTRICT_TYPE), 1, 0, missing = 0) # 분구 여부
+  )
+
+
+# coords_21_1d
+coords_21_1d <- coords_21_1d %>%
+  mutate(
+    SIDO_NM = if_else(
+      str_detect(ORIG_NM, "\\s"),
+      str_extract(ORIG_NM, "^[^\\s]+"),
+      ORIG_NM
+    ),
+    SIGUNGU_NM = if_else(
+      str_detect(ORIG_NM, "\\s"),
+      str_extract(ORIG_NM, "(?<=\\s).+"),
+      NA_character_
+    )
+  )
+
+
+coords_21_1d <- coords_21_1d %>%
+  mutate(
+    # 1. 갑/을/병/정 추출
+    DISTRICT_TYPE = str_extract(SIGUNGU_NM, "(갑|을|병|정)$"),
+    
+    # 2. 복합도농 여부 (시/군/구가 2개 이상, 단 "~시~구" 패턴은 제외)
+    IS_COMPLEX = str_detect(SIGUNGU_NM, "(시|군|구).+(시|군|구)") & 
+      !str_detect(SIGUNGU_NM, "시.+구(갑|을|병|정)?$"),
+    
+    # 3. SIGUNGU_NM2 생성
+    SIGUNGU_NM2 = case_when(
+      # 복합도농이면 그대로
+      IS_COMPLEX == TRUE ~ SIGUNGU_NM,
+      
+      # 갑/을/병/정이 있으면 제거
+      # "성남시분당구갑" → "성남시분당구"
+      # "해운대구갑" → "해운대구"
+      !is.na(DISTRICT_TYPE) ~ str_remove(SIGUNGU_NM, "(갑|을|병|정)$"),
+      
+      # 나머지는 그대로
+      TRUE ~ SIGUNGU_NM
+    ),
+    
+    # 4. 더미 변수들
+    DUM_COMPLEX = if_else(IS_COMPLEX, 1, 0, missing = 0),           # 복합도농 더미
+    DUM_GAP = if_else(DISTRICT_TYPE == "갑", 1, 0, missing = 0),     # 갑 더미
+    DUM_EUL = if_else(DISTRICT_TYPE == "을", 1, 0, missing = 0),     # 을 더미
+    DUM_BYEONG = if_else(DISTRICT_TYPE == "병", 1, 0, missing = 0),  # 병 더미
+    DUM_JEONG = if_else(DISTRICT_TYPE == "정", 1, 0, missing = 0),   # 정 더미
+    DUM_DISTRICT = if_else(!is.na(DISTRICT_TYPE), 1, 0, missing = 0) # 분구 여부
+  )
+
+# coords_22_1d
+coords_22_1d <- coords_22_1d %>%
+  mutate(
+    SIDO_NM = if_else(
+      str_detect(ORIG_NM, "\\s"),
+      str_extract(ORIG_NM, "^[^\\s]+"),
+      ORIG_NM
+    ),
+    SIGUNGU_NM = if_else(
+      str_detect(ORIG_NM, "\\s"),
+      str_extract(ORIG_NM, "(?<=\\s).+"),
+      NA_character_
+    )
+  )
+# coords_22_1d
+coords_22_1d <- coords_22_1d %>%
+  mutate(
+    DISTRICT_TYPE = str_extract(SIGUNGU_NM, "(갑|을|병|정)$"),
+    IS_COMPLEX = str_detect(SIGUNGU_NM, "(시|군|구).+(시|군|구)") & 
+      !str_detect(SIGUNGU_NM, "시.+구(갑|을|병|정)?$"),
+    SIGUNGU_NM2 = case_when(
+      IS_COMPLEX == TRUE ~ SIGUNGU_NM,
+      !is.na(DISTRICT_TYPE) ~ str_remove(SIGUNGU_NM, "(갑|을|병|정)$"),
+      TRUE ~ SIGUNGU_NM
+    ),
+    DUM_COMPLEX = if_else(IS_COMPLEX, 1, 0, missing = 0),
+    DUM_GAP = if_else(DISTRICT_TYPE == "갑", 1, 0, missing = 0),
+    DUM_EUL = if_else(DISTRICT_TYPE == "을", 1, 0, missing = 0),
+    DUM_BYEONG = if_else(DISTRICT_TYPE == "병", 1, 0, missing = 0),
+    DUM_JEONG = if_else(DISTRICT_TYPE == "정", 1, 0, missing = 0),
+    DUM_DISTRICT = if_else(!is.na(DISTRICT_TYPE), 1, 0, missing = 0)
+  )
+
+saveRDS (coords_20_1d, "20대국회_wnominate_1차원")
+saveRDS (coords_21_1d, "21대국회_wnominate_1차원")
+saveRDS (coords_22_1d, "22대국회_wnominate_1차원")
+
+
+library(haven)
+write_dta(coords_20_1d, "20대국회_wnominate_1차원.dta")
+write_dta(coords_21_1d, "21대국회_wnominate_1차원.dta")
+write_dta(coords_22_1d, "22대국회_wnominate_1차원.dta")
