@@ -18,22 +18,19 @@ clear all
 **********************************************************************	
 use "$prof_raw/KOREA_immigration.dta"
 
+tab year // 제주도 없음 
+
 ** 도 이름 수정 
 ** 강원특별자치도 -> 강원도, 전북특별자치도 -> 전라북도 
 ren region sigungu_nm 
 replace sido_nm="강원도" if sido_nm=="강원특별자치도" 
 replace sido_nm = "전라북도" if sido_nm=="전북특별자치도" 
 
-** 연도 필터링 
-keep if year == 2007 | year==2012 | year==2017 | year==2022
-
-** 지역 필터링 
-drop if sido_nm=="제주특별자치도" 
-drop if sido_nm=="세종특별자치시" 
-
 tab year // 226개씩 
 
 merge m:1 year sido_nm sigungu_nm using "$data/sigungu_code.dta"
+tab year if _merge!=3 
+keep if _merge==3 
 drop _merge 
 
 ** 변수 만들기 
@@ -46,12 +43,13 @@ label var immi0 "외국인 주민 수(total = 국적취득자, 미취득자, 외
 * 이민자 비율 (immi_share) & 이질성 더미
 * immi_share = immi0 / pop
 *****************************************************
-gen immi_share = immi0 / pop if year>=2007 & year<=2017
+gen immi_share = immi0 / pop 
 label variable immi_share "Foreign resident share (immi0/pop)"
 
 assert immi_share >= 0 & immi_share <= 1 if !missing(immi_share)
 sum immi_share
 
+/*
 *****************************************************
 * 고정연도별 변수 생성 (2007, 2012)
 * → 해당 연도 행에만 값, 나머지 missing
@@ -92,9 +90,9 @@ assert !missing(immi_share_2012) if year == 2012
 assert  missing(immi_share_2012) if year != 2012
 assert  missing(immi_share_SD)   if year == 2022
 assert !missing(immi_share_SD)   if inlist(year, 2007, 2012, 2017)
-
-sum immi_share_2007 immi_share_2012 immi_share_SD
+*/
 
 drop pop immi0
+tab year 
 
 save "$data/immi_control.dta", replace 

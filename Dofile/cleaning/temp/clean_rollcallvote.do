@@ -15,15 +15,5 @@ clear all
 	global oarlr "${main}/Data raw/OARLR"
 	global singapore "${main}/Data raw/Singapore"
 	*/
-**********************************************************************					
-clear 
-set more off 
-
-use "$data/X_final.dta"
-
-keep sido_nm sigungu_nm regioncode year 
-
-duplicates drop 
-tab year // 1995~2022, 각 연도별 229개 
-
-save "$data/sigungu_code.dta", replace 
+*******************************************************************************
+use "$interim/국회_본회의표결/20-22대국회_wnominate_1차원.dta"

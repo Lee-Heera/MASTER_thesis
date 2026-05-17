@@ -397,9 +397,9 @@ plot(result_22_1d, main.title = "제22대 국회 W-NOMINATE (1차원)")
 # 1차원 결과 확인
 coords_22_1d <- result_22_1d$legislators
 #################### 전체 결과 저장 ######################
-# saveRDS (coords_20_1d, "20대국회_wnominate_1차원")
-# saveRDS (coords_21_1d, "21대국회_wnominate_1차원")
-# saveRDS (coords_22_1d, "22대국회_wnominate_1차원")
+saveRDS (result_20_1d, "20대국회_wnominate_원자료")
+saveRDS (result_21_1d, "21대국회_wnominate_원자료")
+saveRDS (result_22_1d, "22대국회_wnominate_원자료")
 ############################## 결과 데이터 정리#######################################
 # 선거구 머지.roll_raw 데이터에 있는 (ORIG_CD, ORIG_NM) / 정당코드 (POLY_CD) 를 각 coords_20_1d, coords_21_1d, coords_22_1d 에 있는 데이터에 붙이기 
 # 20대 국회 - ORIG_NM 추가
@@ -578,4 +578,7 @@ write_dta(coords_21_1d, "21대국회_wnominate_1차원.dta")
 write_dta(coords_22_1d, "22대국회_wnominate_1차원.dta")
 write_dta (coords_all, "20-22대국회_wnominate_1차원.dta")
 
-
+#################################Figure 그리기 
+plot(result_20_1d, main.title = "제20대 국회 W-NOMINATE (1차원)")
+plot(result_21_1d, main.title = "제21대 국회 W-NOMINATE (1차원)")
+plot(result_22_1d, main.title = "제22대 국회 W-NOMINATE (1차원)")

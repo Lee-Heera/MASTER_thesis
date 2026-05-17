@@ -22,148 +22,129 @@ use "$prof_raw/employmentCOE.dta"
 tab newindcode // 101~119 까지 사용 
 
 keep if newindcode >= 101 & newindcode <= 119 
+
 drop if year < 1995 
 
+replace allempl = allempl/1000  // 1000명 단위
+replace fullempl = fullempl/1000
+replace partempl = partempl/1000
+
 /*
-********************************************************************** 
-* wood & furniture 통합 // 산업분류 통합 
-********************************************************************** 
+* wood & furniture 통합 (필요 시 주석 해제)
 replace newindcode = 118 if newindcode == 119
 replace newind = "other manufacturing" if newindcode == 118
-
 collapse (sum) fullempl partempl allempl firm, by(year sido_nm sigungu_nm regioncode newindcode newind)
-
-drop fullempl partempl firm 
 */
-
-replace allempl = allempl/1000  // 1000명당으로 나누기 
-replace fullempl = fullempl/1000
-replace partempl = partempl/1000 
 
 tab newindcode year 
 ********************************************************************** 
-* 사업체가 아예 없어서 특정 연도, 지역, 산업에 해당하는 값이 아예 없는 경우 넣어줘야 함 
+* 사업체 없는 (region × industry × year) 조합에 0 채우기
+
+* ── 1. fillin 전에 string lookup 보존 ───────────────────────────────────────
+* fillin은 새 행의 string 변수를 missing으로 만들므로 미리 저장
+* isid: 코드 → 라벨이 진짜 1:1인지 명시 검증 (깨지면 코드 충돌)
+preserve
+    keep regioncode sido_nm sigungu_nm
+    duplicates drop
+    isid regioncode
+    tempfile region_lut
+    save `region_lut'
+restore
+
+preserve
+    keep newindcode newind
+    duplicates drop
+    isid newindcode
+    tempfile ind_lut
+    save `ind_lut'
+restore
+
+* ── 2. fillin: 존재하지 않는 조합 추가 ──────────────────────────────────────
 fillin year regioncode newindcode
 
+* ── 3. 수치 변수 0 채우기 (사업체 없음 = 고용 0) ──────────────────────────
 foreach var of varlist allempl fullempl partempl firm {
     replace `var' = 0 if _fillin == 1
 }
 
-br if _fillin == 1
+quietly count if _fillin == 1
+di "fillin 추가 셀: " r(N) "개 (전체의 " %4.1f r(N)/_N*100 "%)"
 
-bysort newindcode: egen temp_newind = mode(newind), maxmode
-replace newind = temp_newind if missing(newind)
-drop temp_newind
+* ── 4. string 변수 lookup에서 복원 (mode() 대신 merge) ─────────────────────
+* fillin이 만든 새 행 포함 모든 행이 매칭돼야 함 → assert(3)으로 보장
+drop sido_nm sigungu_nm newind
+merge m:1 regioncode using `region_lut', nogen assert(3)
+merge m:1 newindcode  using `ind_lut',   nogen assert(3)
 
-bysort regioncode: egen temp_sido = mode(sido_nm), maxmode
-replace sido_nm = temp_sido if missing(sido_nm)
-drop temp_sido
-
-bysort regioncode: egen temp_sigungu = mode(sigungu_nm), maxmode
-replace sigungu_nm = temp_sigungu if missing(sigungu_nm)
-drop temp_sigungu
+br 
 
 ********************************************************************
-* Employment 변수 생성 (allempl 버전만)
-* Panel: year-region-industry
+* 확인 
+preserve
+    bysort year regioncode: gen n_ind = _N
+    assert n_ind == 19
+
+    bysort year regioncode: keep if _n == 1
+    bysort year: gen n_region = _N
+    assert n_region == 229
+restore
+********************************************************************
+* emp i,j,t 
+* emp i,t 
+* emp j,t 
 **********************************************************************
 // 원본 변수명 정리
 rename allempl emp_ijt
 label variable emp_ijt "All employment in region i, industry j, year t"
-**********************************************************************
-* 지역-산업별 특정 연도 고용 (emp_i,j,특정연도)
-**********************************************************************
 
-foreach yr in 1995 2005 2007 2010 2012 2017 {
-    bysort regioncode newindcode: egen emp_ij`yr' = total(emp_ijt * (year == `yr'))
-    label variable emp_ij`yr' "Employment in region i, industry j, year `yr'"
-}
-
-sort year regioncode newindcode 
-**********************************************************************
-* 지역별 연도별 총 고용 (emp_i,t)
-**********************************************************************
 bysort regioncode year: egen emp_it = total(emp_ijt)
 label variable emp_it "Total employment in region i, year t"
 
-**********************************************************************
-* 지역별 특정연도 총 고용 (emp_i,특정연도)
-**********************************************************************
-foreach yr in 1995 2005 2007 2010 2012 2017 {
-    bysort regioncode: egen emp_i`yr' = total(emp_ijt * (year == `yr'))
-    label variable emp_i`yr' "Total employment in region i, year `yr'"
-}
-
-**********************************************************************
-* 산업별 연도별 총 고용 (emp_j,t)
-**********************************************************************
 bysort newindcode year: egen emp_jt = total(emp_ijt)
 label variable emp_jt "Total employment in industry j, year t"
-**********************************************************************
-* 산업별 특정 연도 총 고용 (emp_j,t*) - 표준화용
-**********************************************************************
-foreach yr in 1995 2005 2007 2010 2012 2017 {
-    bysort newindcode: egen emp_j`yr' = total(emp_ijt * (year == `yr'))
-    label variable emp_j`yr' "Total employment in industry j, year `yr'"
+
+save "$interim/COE_empl_control.dta" , replace 
+*********************************************************************
+* base year 기준 
+*********************************************************************
+foreach yr in 1995 2005 2006 2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019 2020 2021 2022  {
+    preserve
+        keep if year == `yr'
+        keep regioncode newindcode emp_ijt emp_it emp_jt
+        rename emp_ijt emp_ij`yr'
+        rename emp_it  emp_i`yr'
+        rename emp_jt  emp_j`yr'
+        tempfile base`yr'
+        save `base`yr''
+    restore
+    merge m:1 regioncode newindcode using `base`yr'', nogen assert(3)
+    label variable emp_ij`yr' "Employment in region i, industry j, year `yr'"
+    label variable emp_i`yr'  "Total employment in region i, year `yr'"
+    label variable emp_j`yr'  "Total employment in industry j, year `yr'"
 }
 
-sort year regioncode newindcode 
-
-order year regioncode newindcode emp* 
 **********************************************************************
 * Employment Shares 계산
-**********************************************************************
-br if missing(emp_i1995) // 없음 
-br if missing(emp_ij1995) // 없음 
-br if emp_i1995==0  // 울산광역시 북구 => 분모가 0이라서 share95 에서 미싱값 처리됨 
-
+********************************************************************** 
+count if emp_i1995==0 // 532개(울산광역시 북구)
+count if missing(emp_i1995) // 없음 
 gen share95 = emp_ij1995 / emp_i1995 
+replace share95 = 0 if emp_i1995==0 // 울산광역시 북구의 경우 분모가 0 (KOSIS에서 확인결과 0)
 label variable share95 "Employment share (1995 base): emp_ij1995 / emp_i1995" 
 
-**********
-br if missing(emp_i2005) // 없음 
-br if missing(emp_ij2005) // 없음 
-br if emp_i2005==0  // 없음 
-
-gen share05 = emp_ij2005 / emp_i2005
-label variable share05 "Employment share (2005 base): emp_ij2005 / emp_i2005"
-
-**********
-br if missing(emp_i2007) // 없음 
-br if missing(emp_ij2007) // 없음 
-br if emp_i2007==0  // 없음 
-
-gen share07 = emp_ij2007 / emp_i2007
-label variable share07 "Employment share (2007 base): emp_ij2007 / emp_i2007"
-
-**********
-br if missing(emp_i2010) // 없음 
-br if missing(emp_ij2010) // 없음 
-br if emp_i2010==0  // 없음 
-gen share10 = emp_ij2010 / emp_i2010
-label variable share10 "Employment share (2010 base): emp_ij2010 / emp_i2010"
-
-**********
-br if missing(emp_i2012) // 없음 
-br if missing(emp_ij2012) // 없음 
-br if emp_i2012==0  // 없음 
-gen share12 = emp_ij2012 / emp_i2012
-label variable share12 "Employment share (2012 base): emp_ij2012 / emp_i2012"
-
-**********
-br if missing(emp_i2017) // 없음 
-br if missing(emp_ij2017) // 없음 
-br if emp_i2017==0  // 없음 
-gen share17 = emp_ij2017 / emp_i2017
-label variable share17 "Employment share (2017 base): emp_ij2017 / emp_i2017"
-
+foreach yr in 2005 2006 2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019 2020 2021 2022 { 
+	
+	count if emp_i`yr' == 0 
+	count if missing(emp_i`yr')
+	gen share`yr' = emp_ij`yr' / emp_i`yr'
+	label variable share`yr' ///
+	"Employment share (`yr' base): emp_ij`yr' / emp_i`yr'"
+}
 *******************************************************************************
-** share95 후처리 
-replace share95 = 0 if emp_i1995==0
+drop _fillin fullempl partempl emp_ijt emp_it emp_jt 
 
-drop _fillin fullempl partempl emp_ijt emp_it emp_jt
-
-keep if year >= 2005 
+sort year regioncode newindcode 
+// keep if year >= 2005 
 // time period 1995~2022
 
 save "$data/kor_empl.dta",replace 

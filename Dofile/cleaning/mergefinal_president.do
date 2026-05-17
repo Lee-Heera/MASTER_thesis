@@ -16,18 +16,35 @@ clear all
 	global singapore "${main}/Data raw/Singapore"
 	*/
 *******************************************************************************
-use "$data/X_final.dta"
-
-merge m:1 regioncode year using "$data/Y_final.dta"
-drop _merge 
-
-merge m:1 regioncode year using "$data/demoshare_control.dta"
-drop _merge 
+****** Control variable (merge)
+use "$data/demoshare_control.dta"
 
 merge m:1 regioncode year using "$data/immi_control.dta"
 drop _merge 
 
 merge m:1 regioncode year using "$data/manu_control.dta"
+tab year if _merge!=3 
+keep if _merge==3 
 drop _merge 
+
+tab year
+
+save "$data/control_clean.dta", replace 
+*******************************************************************************
+use "$data/X_final.dta", clear 
+
+merge m:1 regioncode year using "$data/Y_final.dta"
+drop _merge // _merge==1, _merge==2 일단 살리기 
+
+merge m:1 regioncode year using "$data/control_clean.dta"
+tab year if _merge ==2 
+tab year if _merge ==1
+
+keep if _merge==3 | _merge==1 
+drop _merge
+tab year // 불균형패널 
+
+drop if sido_nm=="세종특별자치시"  | sido_nm== "제주특별자치도"
+tab year // 제주, 세종제외 226개씩, 1997, 2002, 2007, 2012, 2017, 2022 
 
 save "$final/Final_president.dta", replace 

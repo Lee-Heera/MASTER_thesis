@@ -53,8 +53,7 @@ destring Year, replace
 ren (Year Value) (year emp)
 ren Activity isicind
 
-
-collapse (sum) emp (first) isicind, by(year newindcode)
+collapse (sum) emp , by(year newindcode)
 
 tab year // 13개 산업 
 ren emp sgp_empl 

@@ -149,7 +149,7 @@ preserve
     * N73-76행: N75-76 절반만큼 차감 → 106
     foreach var of varlist sgp_empl2001-sgp_empl2007 {
         quietly sum `var' if SSIC2005 == "N75-76"
-        local n7576_half = r(mean) * 0.5
+        local n7576_half = r(sum) * 0.5
         replace `var' = `var' - `n7576_half' if SSIC2005 == "N73-76"
     }
     replace newindcode = 106 if SSIC2005 == "N73-76"
@@ -164,7 +164,7 @@ preserve
     * P80-V99행: P80만큼 차감 → 106
     foreach var of varlist sgp_empl2001-sgp_empl2007 {
         quietly sum `var' if SSIC2005 == "P80"
-        local p80_val = r(mean)
+        local p80_val = r(sum)
         replace `var' = `var' - `p80_val' if SSIC2005 == "P80-V99"
     }
     replace newindcode = 106 if SSIC2005 == "P80-V99"
@@ -180,6 +180,7 @@ preserve
 restore
 
 drop if newindcode == 999
+drop if newindcode == 300 
 append using `n_p_adjusted'
 
 
@@ -264,7 +265,7 @@ preserve
     * M69-75행: M72-75 * 1/4 만큼 차감 → 106
     foreach var of varlist sgp_empl2008-sgp_empl2025 {
         quietly sum `var' if SSIC2020 == "M72-75"
-        local m7275_quarter = r(mean) * 0.25
+        local m7275_quarter = r(sum) * 0.25
         replace `var' = `var' - `m7275_quarter' if SSIC2020 == "M69-75"
     }
     replace newindcode = 106 if SSIC2020 == "M69-75"
@@ -279,7 +280,7 @@ preserve
     * O84-U99행: O85 만큼 차감 → 106
     foreach var of varlist sgp_empl2008-sgp_empl2025 {
         quietly sum `var' if SSIC2020 == "O85"
-        local o85_val = r(mean)
+        local o85_val = r(sum)
         replace `var' = `var' - `o85_val' if SSIC2020 == "O84-U99"
     }
     replace newindcode = 106 if SSIC2020 == "O84-U99"
