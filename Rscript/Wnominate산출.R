@@ -123,33 +123,80 @@ poli_raw %>%
   as.data.frame() %>%
   print()
 
+# 22대 정당분포 -> 맞음 
+# 21대 정당분류 -> 합쳤다가 빠져나갔다가 하는 거대양당 세부계통은 그냥 거대양당으로 
+# 20대 정당분류 -> 
+
+# ── 임기만료 기준 정당 보정: roll_raw 마지막 표결 시점 정당으로 불일치 수정 ──
+# ── 임기만료 기준 정당 보정: roll_raw 마지막 표결 시점 정당으로 불일치 수정 ──
+
+roll_final_party <- roll_raw %>%
+  group_by(MONA_CD, AGE) %>%
+  slice_max(VOTE_DATE, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(MONA_CD, HG_NM, AGE, POLY_NM_final = POLY_NM)
+
+party_compare <- poli_raw %>%
+  mutate(정당_orig = 정당) %>%           # 원본 보존
+  left_join(roll_final_party, by = c("NAAS_CD" = "MONA_CD", "AGE")) %>%
+  mutate(일치 = (정당 == POLY_NM_final) | is.na(POLY_NM_final))
+
+# 불일치 확인
+cat("=== poli_raw vs roll_raw 정당 불일치 ===\n")
+party_compare %>%
+  filter(!일치) %>%
+  select(의원명, AGE, 정당_poli = 정당, 정당_roll = POLY_NM_final) %>%
+  arrange(AGE, 의원명) %>%
+  print(n = Inf)
+
+# 보정 적용
+poli_raw <- party_compare %>%
+  mutate(
+    # 1단계: 불일치는 roll_raw 기준으로 덮어쓰기
+    정당 = if_else(!일치, POLY_NM_final, 정당),
+    # 2단계: 대수별 시대착오적 정당명 후처리
+    정당 = case_when(
+      # 20대: 해당 시기에 없는 정당명 → poli_raw 원본 또는 실제 당명으로 교체
+      AGE == 20 & 정당 == "개혁신당"   ~ 정당_orig,       # poli_raw 원본 복원
+      AGE == 20 & 정당 == "진보당"     ~ "민중당",
+      AGE == 20 & 정당 == "새로운미래" ~ "더불어민주당",
+      # 21대: 조국혁신당은 22대 창당 → 더불어민주당으로
+      AGE == 21 & 정당 == "조국혁신당" ~ "더불어민주당",
+      TRUE ~ 정당
+    )
+  ) %>%
+  select(-POLY_NM_final, -HG_NM, -일치, -정당_orig)
+
 ##########################  roll_raw + poli_raw 머지 & 정당명 비교 ######################
 roll_poli_merged <- roll_raw %>%
   left_join(
     poli_raw %>% select(NAAS_CD, AGE, 정당_poli = 정당, 지역, 성별, 당선횟수, 당선방법, 소속위원회),
     by = c("MONA_CD" = "NAAS_CD", "AGE")
-  )
+  ) %>%
+  mutate(POLY_NM_CLEAN = coalesce(정당_poli, POLY_NM))  # ← 여기 추가
 
-# roll_raw POLY_NM vs poli_raw 정당 불일치 확인
-cat("=== POLY_NM(roll_raw) vs 정당(poli_raw) 불일치 ===\n")
 roll_poli_merged %>%
-  filter(!is.na(정당_poli), POLY_NM != 정당_poli) %>% distinct(MONA_CD, AGE, POLY_NM, 정당_poli) %>%
- arrange(AGE, 정당_poli)
+  distinct(MONA_CD, AGE, POLY_NM_CLEAN) %>%
+  count(AGE, POLY_NM_CLEAN, sort = FALSE) %>%
+  arrange(AGE, desc(n)) %>%
+  as.data.frame()
 
-# 정당명 클리닝: poli_raw의 정당(선거 당시)을 우선, 없으면 roll_raw POLY_NM 사용
-roll_poli_merged <- roll_poli_merged %>%
-  mutate(POLY_NM_CLEAN = coalesce(정당_poli, POLY_NM))
 
-cat("\n=== 정당명 보정 현황 ===\n")
-cat(sprintf("POLY_NM_CLEAN이 정당_poli로 교체된 건수: %d행 (의원-법안 단위)\n",
-            sum(!is.na(roll_poli_merged$정당_poli) & roll_poli_merged$POLY_NM != roll_poli_merged$POLY_NM_CLEAN)))
-cat(sprintf("poli_raw 미매칭(POLY_NM 그대로 유지): %d행\n",
-            sum(is.na(roll_poli_merged$정당_poli))))
 
-# 보정 후 잔존 정당명 목록 확인
-cat("\n=== POLY_NM_CLEAN 정당 목록 ===\n")
 roll_poli_merged %>%
-  count(POLY_NM_CLEAN, sort = TRUE) 
+  distinct(MONA_CD, AGE, POLY_NM_CLEAN) %>%
+  count(AGE, POLY_NM_CLEAN, sort = FALSE) %>%
+  arrange(AGE, desc(n)) %>%
+  as.data.frame()
+
+roll_poli_merged %>%
+  distinct(POLY_NM_CLEAN) %>%
+  count(POLY_NM_CLEAN, sort = FALSE) %>%
+  arrange(desc(n)) %>%
+  as.data.frame()
+# 20~22대 정당 
+# 거대 진보양당: 더불어민주당, 조국혁신당, 새로운미래, 열린민주당 
+# 거대 보수양당: 미래한국당, 국민의힘, 미래통합당, 바른미래당, 자유한국당, 새누리당, 친박신당
 
 # 정당분류 변수 2개 추가
 # Ver1) 거대양당(위성정당포함) / 무소속 / 군소정당 그대로
@@ -157,10 +204,10 @@ roll_poli_merged <- roll_poli_merged %>%
   mutate(
     PARTY_MAJOR = case_when(
       # 국민의힘 계열 (위성정당 포함)
-      POLY_NM_CLEAN %in% c("국민의힘", "미래통합당", "미래한국당", "새누리당", "자유한국당", "시대전환") ~ "국민의힘",
+      POLY_NM_CLEAN %in% c("국민의힘", "미래통합당", "미래한국당", "새누리당", "자유한국당", "시대전환", "친박신당", "바른미래당") ~ "국민의힘",
 
       # 더불어민주당 계열 (위성정당 포함)
-      POLY_NM_CLEAN %in% c("더불어민주당", "열린민주당", "더불어시민당") ~ "더불어민주당",
+      POLY_NM_CLEAN %in% c("더불어민주당", "열린민주당", "더불어시민당", "조국혁신당", "새로운미래") ~ "더불어민주당",
 
       # 무소속
       POLY_NM_CLEAN == "무소속" ~ "무소속",
@@ -170,59 +217,64 @@ roll_poli_merged <- roll_poli_merged %>%
     )
   )
 
+roll_poli_merged %>%
+  distinct(PARTY_MAJOR) %>%
+  count(PARTY_MAJOR, sort = FALSE) %>%
+  arrange(desc(n)) %>%
+  as.data.frame()
+
 roll_poli_merged %>%  count(PARTY_MAJOR, sort = TRUE) 
 
 roll_poli_merged <- roll_poli_merged %>%
   mutate(
     PARTY_EN = case_when(
       # 거대양당 계열
-      POLY_NM_CLEAN %in% c("더불어민주당", "열린민주당", "더불어시민당")
-      ~ "Democratic Party of Korea (DPK)",
-      POLY_NM_CLEAN %in% c("국민의힘", "미래통합당", "미래한국당",
-                     "새누리당", "자유한국당", "시대전환") ~ "People Power Party (PPP)",
+      PARTY_MAJOR == "더불어민주당" ~ "Democratic Party of Korea (DPK)",
+      PARTY_MAJOR == "국민의힘"     ~ "People Power Party (PPP)",
 
       # 군소정당
-      POLY_NM_CLEAN == "국민의당"    ~ "The People's Party",
-      POLY_NM_CLEAN == "개혁신당"    ~ "Reform Party",
-      POLY_NM_CLEAN == "기본소득당"  ~ "Basic Income Party",
-      POLY_NM_CLEAN == "민생당"      ~ "Minsaeng Party",
-      POLY_NM_CLEAN == "민주평화당"  ~ "Party for Democracy and Peace (PDP)",
-      POLY_NM_CLEAN == "민중당"      ~ "The Minjung Party",
-      POLY_NM_CLEAN == "바른미래당"  ~ "Bareunmirae Party",
-      POLY_NM_CLEAN == "사회민주당"  ~ "Social Democratic Party (SDP)",
-      POLY_NM_CLEAN == "새로운미래"  ~ "New Future Party",
-      POLY_NM_CLEAN == "우리공화당"  ~ "Our Republican Party",
-      POLY_NM_CLEAN == "자유통일당"  ~ "Liberty Unification Party",
-      POLY_NM_CLEAN == "정의당"      ~ "Justice Party",
-      POLY_NM_CLEAN == "조국혁신당"  ~ "Rebuilding Korea Party",
-      POLY_NM_CLEAN == "진보당"      ~ "Progressive Party",
-      POLY_NM_CLEAN == "친박신당"    ~ "Pro-Park New Party",
+      PARTY_MAJOR == "국민의당"    ~ "The People's Party",
+      PARTY_MAJOR == "개혁신당"    ~ "Reform Party",
+      PARTY_MAJOR == "기본소득당"  ~ "Basic Income Party",
+      PARTY_MAJOR == "민생당"      ~ "Minsaeng Party",
+      PARTY_MAJOR == "민주평화당"  ~ "Party for Democracy and Peace (PDP)",
+      PARTY_MAJOR == "민중당"      ~ "The Minjung Party",
+      PARTY_MAJOR == "사회민주당"  ~ "Social Democratic Party (SDP)",
+      PARTY_MAJOR == "우리공화당"  ~ "Our Republican Party",
+      PARTY_MAJOR == "자유통일당"  ~ "Liberty Unification Party",
+      PARTY_MAJOR == "정의당"      ~ "Justice Party",
+      PARTY_MAJOR == "진보당"      ~ "Progressive Party",
 
       # 무소속
-      POLY_NM_CLEAN == "무소속"      ~ "Independent",
+      PARTY_MAJOR == "무소속"      ~ "Independent",
 
       # 나머지
-      TRUE ~ POLY_NM_CLEAN
+      TRUE ~ PARTY_MAJOR
     )
   )
 
+
+roll_poli_merged %>%
+  distinct(PARTY_MAJOR) %>%
+  count(PARTY_MAJOR, sort = FALSE) %>%
+  arrange(desc(n)) %>%
+  as.data.frame()
 
 # Ver2) 이념 분류
 roll_poli_merged <- roll_poli_merged %>%
   mutate(
     PARTY_IDEOLOGY = case_when(
       # Conservative
-      POLY_NM_CLEAN %in% c("국민의힘", "미래통합당", "미래한국당",
-                           "새누리당", "자유한국당", "시대전환", "개혁신당", "우리공화당", "자유통일당", "우리공화당", "친박신당", "바른미래당") ~ "Conservative",
+      PARTY_MAJOR %in% c("국민의힘", "개혁신당", "우리공화당", "자유통일당") ~ "Conservative",
 
       # Liberal
-      POLY_NM_CLEAN %in% c("더불어민주당", "열린민주당", "더불어시민당","기본소득당", "민주평화당", "민중당", "사회민주당", "정의당", "진보당", "조국혁신당" ) ~ "Liberal",
+      PARTY_MAJOR %in% c("더불어민주당", "기본소득당", "민중당", "사회민주당", "정의당", "진보당", "민주평화당") ~ "Progressive",
 
       # 무소속
-      POLY_NM_CLEAN == "무소속" ~ "Independent",
+      PARTY_MAJOR== "무소속" ~ "Independent",
 
       # 기타
-      TRUE ~ "Minor Party"
+      TRUE ~ "The third party"
     )
   )
 
@@ -233,9 +285,10 @@ roll_poli_merged <- roll_poli_merged %>%
     PARTY_GROUP = case_when(
       PARTY_MAJOR == "더불어민주당"            ~ "Democratic Party of Korea (Progressive major party)",
       PARTY_MAJOR == "국민의힘"                ~ "People Power Party (Conservative major party)",
-      POLY_NM_CLEAN %in% c("개혁신당", "우리공화당", "자유통일당", "우리공화당", "친박신당", "바른미래당", "국민의당")         ~ "Conservative minor parties",
-      POLY_NM_CLEAN %in% c("기본소득당", "민주평화당", "민중당", "사회민주당", "정의당", "진보당", "조국혁신당", "새로운미래", "민생당")             ~ "Progressive minor parties",
-      POLY_NM_CLEAN == "무소속"                  ~ "Independent"
+      PARTY_MAJOR  %in% c("개혁신당", "우리공화당", "자유통일당", "우리공화당")         ~ "Conservative minor parties",
+      PARTY_MAJOR %in% c("기본소득당", "민중당", "사회민주당", "정의당", "진보당", "민주평화당") ~ "Progressive minor parties",
+      PARTY_MAJOR == "무소속"                  ~ "Independent",
+      TRUE                                     ~ "The third party"
     )
   )
 
@@ -250,7 +303,7 @@ roll_poli_merged %>%
   arrange(PARTY_GROUP, POLY_NM_CLEAN)
 # ── 매핑 검증: POLY_NM_CLEAN × 생성변수 크로스탭 ──────────────────────
 mapping_check <- roll_poli_merged %>%
-  distinct(POLY_NM_CLEAN, PARTY_MAJOR, PARTY_IDEOLOGY, PARTY_EN) %>%
+  distinct(POLY_NM_CLEAN, PARTY_MAJOR, PARTY_IDEOLOGY, PARTY_EN, PARTY_GROUP) %>%
   arrange(PARTY_IDEOLOGY, POLY_NM_CLEAN)
 
 cat("=== 정당 매핑 검증 (POLY_NM_CLEAN → 생성변수) ===\n")
@@ -320,11 +373,19 @@ for (age in c(20, 21, 22)) {
     column_to_rownames("MONA_CD")
   
   # 의원 정보
+  # ※ legis.data는 roll_wide의 행(의원) 순서와 positional matching됨
+  #   arrange(MONA_CD) 알파벳 정렬 → roll_wide pivot 순서와 어긋나면
+  #   coord1D 점수에 엉뚱한 의원 이름·정당이 붙는 치명적 오류 발생
   legis_data <- roll_recoded %>%
     filter(AGE == age) %>%
-    distinct(MONA_CD, HG_NM, PARTY_MAJOR, PARTY_IDEOLOGY, PARTY_EN, PARTY_GROUP) %>%
-    arrange(MONA_CD) %>%
+    # 탈당 의원 처리: 같은 MONA_CD에 정당이 여러 개면 표결 횟수 가장 많은 정당으로
+    count(MONA_CD, HG_NM, PARTY_MAJOR, PARTY_IDEOLOGY, PARTY_EN, PARTY_GROUP) %>%
+    group_by(MONA_CD) %>%
+    slice_max(n, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(-n) %>%
     filter(MONA_CD %in% rownames(roll_wide)) %>%
+    arrange(match(MONA_CD, rownames(roll_wide))) %>%  # ← roll_wide 행 순서에 맞춤
     mutate(
       party = case_when(
         PARTY_GROUP == "People Power Party (Conservative major party)" ~ 100,
@@ -383,12 +444,30 @@ polarity_1d <- list(
   "22" = "GDG1847Z"    # 권성동
 )
 
+# ── 2D polarity 보조: 대수별 국민의힘 계열 표결 참여 상위 30명 ──────────────
+# (dim2 anchor를 임기 내 안정적으로 표결한 의원으로 고르기 위한 확인용)
+roll_poli_merged %>%
+  filter(AGE == 20,
+         PARTY_MAJOR == "국민의힘",
+         RESULT_VOTE_MOD %in% c("찬성", "반대")) %>%
+  count(MONA_CD, HG_NM, name = "n_votes") %>%
+  slice_max(n_votes, n = 30, with_ties = FALSE) 
+
+
+roll_poli_merged %>%
+  filter(AGE == 21,
+         PARTY_MAJOR == "국민의힘",
+         RESULT_VOTE_MOD %in% c("찬성", "반대")) %>%
+  count(MONA_CD, HG_NM, name = "n_votes") %>%
+  slice_max(n_votes, n = 30, with_ties = FALSE) 
+
+
 # 2D polarity: dim1은 1D와 동일한 의원으로 방향 고정, dim2는 같은 의원 반복
-# → dim2 방향은 사실상 자유 (최소 제약으로 탐색)
+# → dim2 anchor는 위 출력 확인 후 표결 참여 수 많은 의원으로 교체
 polarity_2d <- list(
-  "20" = c("SLW27496", "SNJ6318D"), #20대: 나경원, 김무성 
-  "21" = c("8SV6917G", "NAL4555X"), #21대: 주호영, 홍준표 
-  "22" = c("GDG1847Z", "CNW5754J") #22대: 권성동, 송석준 
+  "20" = c("SLW27496", "YBM9779M"), #20대: 나경원, 김한표 
+  "21" = c("8SV6917G", "LH97552Q"), #21대: 주호영, 김도읍 
+  "22" = c("GDG1847Z", "CNW5754J")  #22대: 권성동, 송석준
 )
 
 ###############################################################################
@@ -409,7 +488,7 @@ for (age in ages) {
   png(file.path(fig_dir, sprintf("%s대국회_wnominate_1d.png", age)), width = 900, height = 700)
   plot(result_list[[age]], main.title = sprintf("제%s대 국회 W-NOMINATE (1차원)", age))
   dev.off()
-  saveRDS(result_list[[age]], sprintf("%s대국회_wnominate_1d_원자료", age))
+  saveRDS(result_list[[age]], sprintf("%s대국회_wnominate_1d_원자료.rds", age))
 
   # 2D: dim1 방향만 고정, dim2는 자유 탐색
   result_list_2d[[age]] <- wnominate(
@@ -420,7 +499,7 @@ for (age in ages) {
   png(file.path(fig_dir, sprintf("%s대국회_wnominate_2d.png", age)), width = 900, height = 700)
   plot(result_list_2d[[age]], main.title = sprintf("제%s대 국회 W-NOMINATE (2차원)", age))
   dev.off()
-  saveRDS(result_list_2d[[age]], sprintf("%s대국회_wnominate_2d_원자료", age))
+  saveRDS(result_list_2d[[age]], sprintf("%s대국회_wnominate_2d_원자료.rds", age))
 }
 
 # ###############################################################################
@@ -503,7 +582,11 @@ coords_all_2d <- bind_rows(coords_2d_list, .id = "AGE_chr") %>%
 
 # 정당 변수 직접 join (wnominate가 character 컬럼 보존을 보장하지 않으므로)
 party_vars <- roll_poli_merged %>%
-  distinct(MONA_CD, AGE, PARTY_GROUP, PARTY_MAJOR, PARTY_EN)
+  count(MONA_CD, AGE, PARTY_GROUP, PARTY_MAJOR, PARTY_EN) %>%
+  group_by(MONA_CD, AGE) %>%
+  slice_max(n, n = 1, with_ties = FALSE) %>%   # 탈당 의원: 표결 가장 많은 정당
+  ungroup() %>%
+  select(-n)
 
 coords_all    <- coords_all    %>% select(-any_of(c("PARTY_GROUP","PARTY_MAJOR","PARTY_EN"))) %>%
   left_join(party_vars, by = c("MONA_CD", "AGE"))
@@ -516,172 +599,12 @@ cat(sprintf("coords_all PARTY_GROUP NA: %d / %d\n",
 # 저장 (1D · 2D 동일 구조)
 library(haven)
 for (age in ages) {
-  saveRDS(coords_list[[age]],    sprintf("%s대국회_wnominate_1차원",     age))
+  saveRDS(coords_list[[age]],    sprintf("%s대국회_wnominate_1차원.rds",     age))
   write_dta(coords_list[[age]],  sprintf("%s대국회_wnominate_1차원.dta", age))
-  saveRDS(coords_2d_list[[age]], sprintf("%s대국회_wnominate_2차원",     age))
+  saveRDS(coords_2d_list[[age]], sprintf("%s대국회_wnominate_2차원.rds",     age))
   write_dta(coords_2d_list[[age]], sprintf("%s대국회_wnominate_2차원.dta", age))
 }
-saveRDS(coords_all,    "20-22대국회_wnominate_1차원")
+saveRDS(coords_all,    "20-22대국회_wnominate_1차원.rds")
 write_dta(coords_all,  "20-22대국회_wnominate_1차원.dta")
-saveRDS(coords_all_2d,   "20-22대국회_wnominate_2차원")
+saveRDS(coords_all_2d,   "20-22대국회_wnominate_2차원.rds")
 write_dta(coords_all_2d, "20-22대국회_wnominate_2차원.dta")
-
-##############################Figure 그리기 ###############################여기부터 수정 
-library(ggplot2)
-library(ggrepel)
-library(RColorBrewer)
-library(ggforce)
-
-fig_dir <- "/Users/ihuila/Research/MASTER_thesis/Output/figure"
-dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
-
-# ── 색상 설정 (PARTY_GROUP 기준) ─────────────────────────────────
-group_colors <- c(
-  "Democratic Party of Korea (Progressive major party)" = "#1A6FC4",
-  "People Power Party (Conservative major party)"       = "#D42828",
-  "Conservative minor parties"                          = "#7D3C98",
-  "Progressive minor parties"                           = "#D4AC0D",
-  "Independent"                                         = "#7F8C8D"
-)
-
-# 한국어 레이블 (lang=="kr"일 때 사용; lang=="en"은 PARTY_GROUP명 그대로 — waiver())
-lbl_kr <- c(
-  "Democratic Party of Korea (Progressive major party)" = "더불어민주당",
-  "People Power Party (Conservative major party)"       = "국민의힘",
-  "Conservative minor parties"                          = "보수 군소정당",
-  "Progressive minor parties"                           = "진보 군소정당",
-  "Independent"                                         = "무소속"
-)
-
-age_labels <- c("20" = "20th Assembly", "21" = "21st Assembly", "22" = "22nd Assembly")
-
-# ══════════════════════════════════════════════════════════════════
-# Figure 저장 루프: scope × lang (inline)
-# ══════════════════════════════════════════════════════════════════
-
-for (scope in c("major", "all")) {
-
-  major_groups <- c("Democratic Party of Korea (Progressive major party)",
-                    "People Power Party (Conservative major party)")
-
-  if (scope == "major") {
-    d1 <- coords_all    %>% filter(PARTY_GROUP %in% major_groups)
-    d2 <- coords_all_2d %>% filter(PARTY_GROUP %in% major_groups)
-  } else {
-    d1 <- coords_all    %>% filter(!is.na(PARTY_GROUP))
-    d2 <- coords_all_2d %>% filter(!is.na(PARTY_GROUP))
-  }
-
-  for (lang in c("kr", "en")) {
-    lbl <- if (lang == "kr") lbl_kr else waiver()
-    sfx <- sprintf("%s_%s", scope, lang)
-
-    # ── 1D strip ──────────────────────────────────────────────────
-    set.seed(42)
-    p <- ggplot(d1, aes(x = coord1D, y = 0, color = PARTY_GROUP)) +
-      geom_jitter(height = 0.4, size = 1.5, alpha = 0.7, width = 0) +
-      geom_vline(xintercept = 0, linetype = "dashed", color = "gray40", linewidth = 0.4) +
-      facet_wrap(~AGE_chr, ncol = 1, labeller = labeller(AGE_chr = age_labels)) +
-      scale_color_manual(values = group_colors, labels = lbl) +
-      scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.5)) +
-      labs(x = "W-NOMINATE Score  ← Liberal · Conservative →", y = NULL, color = "Party",
-           title = "W-NOMINATE Ideal Point Distribution (1st Dimension)") +
-      theme_bw(base_size = 12) +
-      theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
-            panel.grid.major.y = element_blank(),
-            strip.background = element_rect(fill = "gray95"), legend.position = "bottom") +
-      guides(color = guide_legend(nrow = 2, override.aes = list(size = 3)))
-    ggsave(file.path(fig_dir, sprintf("1d_strip_%s.pdf", sfx)), p, width = 8, height = 6)
-
-    # ── 1D density ────────────────────────────────────────────────
-    d1_nd <- d1 %>%
-      filter(PARTY_GROUP != "Independent") %>%
-      mutate(AGE_chr = factor(AGE_chr, labels = age_labels))
-    p <- ggplot(d1_nd, aes(x = coord1D, fill = PARTY_GROUP, color = PARTY_GROUP)) +
-      geom_density(alpha = 0.35, linewidth = 0.7) +
-      geom_vline(xintercept = 0, linetype = "dashed", color = "gray40", linewidth = 0.4) +
-      facet_wrap(~AGE_chr, ncol = 1) +
-      scale_fill_manual(values = group_colors, labels = lbl) +
-      scale_color_manual(values = group_colors, labels = lbl) +
-      scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.5)) +
-      labs(x = "W-NOMINATE Score  ← Liberal · Conservative →",
-           y = "Density", fill = "Party", color = "Party",
-           title = "Density Distribution of Ideal Points (1st Dimension)") +
-      theme_bw(base_size = 12) +
-      theme(strip.background = element_rect(fill = "gray95"), legend.position = "bottom")
-    ggsave(file.path(fig_dir, sprintf("1d_density_%s.pdf", sfx)), p, width = 7, height = 7)
-
-    # ── 1D extremes ───────────────────────────────────────────────
-    ext1 <- d1 %>%
-      group_by(AGE_chr) %>%
-      mutate(pct = percent_rank(coord1D)) %>%
-      filter(pct <= 0.05 | pct >= 0.95) %>%
-      ungroup() %>%
-      mutate(AGE_chr = factor(AGE_chr, labels = age_labels))
-    d1_f <- d1 %>% mutate(AGE_chr = factor(AGE_chr, labels = age_labels))
-    p <- ggplot(d1_f, aes(x = coord1D, fill = PARTY_GROUP)) +
-      geom_histogram(bins = 40, alpha = 0.5, position = "identity") +
-      geom_label_repel(data = ext1, aes(x = coord1D, y = 8, label = HG_NM, color = PARTY_GROUP),
-                       size = 2.5, max.overlaps = 15, fill = "white") +
-      facet_wrap(~AGE_chr, ncol = 1) +
-      scale_fill_manual(values = group_colors, labels = lbl) +
-      scale_color_manual(values = group_colors, labels = lbl) +
-      labs(x = "W-NOMINATE Score", y = "Number of Legislators", fill = "Party", color = "Party",
-           title = "Extreme Legislators (Top/Bottom 5%)") +
-      theme_bw(base_size = 12) +
-      theme(strip.background = element_rect(fill = "gray95"), legend.position = "bottom")
-    ggsave(file.path(fig_dir, sprintf("1d_extremes_%s.pdf", sfx)), p, width = 8, height = 8)
-
-    # ── 2D facet ──────────────────────────────────────────────────
-    d2_f <- d2 %>% mutate(AGE_chr = factor(AGE_chr, labels = age_labels))
-    p <- ggplot(d2_f, aes(x = coord1D, y = coord2D, color = PARTY_GROUP)) +
-      geom_point(size = 1.8, alpha = 0.75) +
-      geom_hline(yintercept = 0, color = "gray70", linewidth = 0.3) +
-      geom_vline(xintercept = 0, color = "gray70", linewidth = 0.3) +
-      facet_wrap(~AGE_chr, ncol = 3) +
-      scale_color_manual(values = group_colors, labels = lbl) +
-      scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.5)) +
-      scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.5)) +
-      labs(x = "1st Dimension", y = "2nd Dimension", color = "Party",
-           title = "W-NOMINATE Ideal Points (2nd Dimension)") +
-      theme_bw(base_size = 12) +
-      theme(strip.background = element_rect(fill = "gray95"), legend.position = "bottom", aspect.ratio = 1)
-    ggsave(file.path(fig_dir, sprintf("2d_facet_%s.pdf", sfx)), p, width = 15, height = 8)
-
-    # ── 2D convex hull ────────────────────────────────────────────
-    p <- ggplot(d2_f, aes(x = coord1D, y = coord2D, color = PARTY_GROUP, fill = PARTY_GROUP)) +
-      geom_mark_hull(aes(group = PARTY_GROUP), alpha = 0.08, expand = unit(3, "mm"), radius = unit(3, "mm")) +
-      geom_point(size = 1.5, alpha = 0.6) +
-      facet_wrap(~AGE_chr, ncol = 3) +
-      scale_color_manual(values = group_colors, labels = lbl) +
-      scale_fill_manual(values  = group_colors, labels = lbl) +
-      scale_x_continuous(limits = c(-1.1, 1.1), breaks = seq(-1, 1, 0.5)) +
-      scale_y_continuous(limits = c(-1.1, 1.1), breaks = seq(-1, 1, 0.5)) +
-      labs(x = "1st Dimension", y = "2nd Dimension", color = "Party", fill = "Party",
-           title = "Party Ideology Space — Convex Hull (2D W-NOMINATE)") +
-      theme_bw(base_size = 12) +
-      theme(strip.background = element_rect(fill = "gray95"), legend.position = "bottom", aspect.ratio = 1)
-    ggsave(file.path(fig_dir, sprintf("2d_hull_%s.pdf", sfx)), p, width = 12, height = 5)
-
-    # ── 2D per-assembly ───────────────────────────────────────────
-    for (age in ages) {
-      d2_a <- d2 %>% filter(AGE_chr == age)
-      ext2  <- d2_a %>% mutate(dist = sqrt(coord1D^2 + coord2D^2)) %>% slice_max(dist, n = 15)
-      p <- ggplot(d2_a, aes(x = coord1D, y = coord2D, color = PARTY_GROUP)) +
-        geom_point(size = 2, alpha = 0.7) +
-        geom_label_repel(data = ext2, aes(label = HG_NM),
-                         size = 2.5, max.overlaps = 20, fill = "white", label.padding = 0.15) +
-        geom_hline(yintercept = 0, color = "gray60", linewidth = 0.3, linetype = "dashed") +
-        geom_vline(xintercept = 0, color = "gray60", linewidth = 0.3, linetype = "dashed") +
-        scale_color_manual(values = group_colors, labels = lbl) +
-        scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.5)) +
-        scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.5)) +
-        labs(x = "1st Dimension", y = "2nd Dimension", color = "Party",
-             title = sprintf("%s National Assembly — W-NOMINATE (2D)", age_labels[age]),
-             subtitle = "Top 15 legislators by distance from origin labeled") +
-        theme_bw(base_size = 13) +
-        theme(legend.position = "bottom", aspect.ratio = 1)
-      ggsave(file.path(fig_dir, sprintf("2d_%s대_%s.pdf", age, sfx)), p, width = 7, height = 7)
-    }
-  }
-}
