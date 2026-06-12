@@ -137,4 +137,6 @@ tab year // 지역 229개씩
 
 isid year regioncode
 
+drop newindcode newind 
+
 save "$data/X_final.dta", replace
