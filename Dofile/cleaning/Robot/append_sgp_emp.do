@@ -59,6 +59,11 @@ sort newindcode
 * save 
 save "$data/sgp_empl.dta", replace // industry-level data 
 
+* only manufacturing 
+keep if newindcode >=107 & newindcode <= 119 
+save "$data/sgp_empl_mfg.dta", replace 
+
+
 /*
 ********************************************************************** 
 * wood & furniture 통합

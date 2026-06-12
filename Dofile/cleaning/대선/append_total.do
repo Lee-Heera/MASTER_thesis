@@ -28,10 +28,10 @@ tab year
 ****************************** 지역코드 매치*************************	
 merge m:1 sido_nm sigungu_nm year  using "$data/sigungu_code.dta"
 
-tab year if _merge== 2 // 대선 없는 연도 + 1997, 2002, 2007 세종특별자치시 빈 것 
+tab year if _merge==2 // 대선없는연도 
 keep if _merge==3 
 drop _merge 
-tab year // 각연도 228개 
+tab year // 229 
 
 save "$interim/대선_개표/president_append.dta", replace 
 **********************************************************************
@@ -199,7 +199,7 @@ drop 선거인수 투표수 유효투표수 무효투표 기권  liberal1_st con
 compress
 sort year regioncode
 
-tab year // 1997, 2002, 2007년 세종제외 228 // 2012, 2017, 2022년 229개 
+tab year // 229 
 save "$data/Y_final.dta", replace 
 
 

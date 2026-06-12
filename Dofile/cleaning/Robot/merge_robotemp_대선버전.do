@@ -39,6 +39,28 @@ foreach ctr in kr sg {
     gen drobot_`ctr'_1722 = rb_`ctr'2022 - rb_`ctr'2017
 }
 
+/*
+count if drobot_kr_0712 < 0
+tab newindcode if drobot_kr_0712 < 0 // 102, 108, 119 
+di r(N)/121828 * 100 "%"
+
+count if drobot_kr_1217 < 0
+tab newindcode if drobot_kr_1217 < 0 // 102, 105, 108 
+di r(N)/121828 * 100 "%"
+
+count if drobot_kr_1722 < 0
+tab newindcode if drobot_kr_1722 < 0 // 103, 110, 113 
+di r(N)/121828 * 100 "%"
+
+sum drobot_kr_*, detail 
+*/
+// 102: mining 
+// 103: utility 
+// 105: education, research, development 
+// 108: textiles 
+// 110: plastics and chemicals 
+// 113: metal products 
+// 119: wood and furniture 
 **********************************************************************
 * STEP 2: Bartik X / IV 계산
 * X  = Σ_j share07_ij  × ΔRobot_kr_j / emp_j2007

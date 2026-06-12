@@ -307,3 +307,17 @@ reshape long sgp_empl, i(newindcode) j(year)
 sort newindcode year
 
 save "$interim/DOS/sgp_empl3_clean.dta", replace
+
+/*
+**********************************************************************
+* 제조업만 포함 버전 (newindcode 107~119)
+**********************************************************************
+use "$interim/DOS/sgp_empl2_clean.dta", clear
+keep if newindcode >= 107 & newindcode <= 119
+save "$interim/DOS/sgp_empl2_clean_mfg.dta", replace
+
+use "$interim/DOS/sgp_empl3_clean.dta", clear
+keep if newindcode >= 107 & newindcode <= 119
+save "$interim/DOS/sgp_empl3_clean_mfg.dta", replace
+*/
+

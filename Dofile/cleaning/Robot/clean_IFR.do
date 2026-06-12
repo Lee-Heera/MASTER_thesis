@@ -104,79 +104,57 @@ rename final_opstockKR rb_kr
 rename final_opstockSG rb_sg
 
 reshape wide rb_kr rb_sg, i(newindcode newind) j(year) 
-save "$interim/IFR/IFR_wide.dta",replace 
-save "$data/IFR_robot.dta", replace  
+save "$interim/IFR/IFR_wide.dta",replace
+save "$data/IFR_robot.dta", replace
 
-/*
-********************************************************************** 
-* STEP 9: Construct Variable (difference in the stock of robot in each country)
 **********************************************************************
-foreach ctr in sg kr { 
-	** 대선 
-	gen drobot_`ctr'_0722 = rb_`ctr'2022 - rb_`ctr'2007
-	
-	gen drobot_`ctr'_0712 = rb_`ctr'2012 - rb_`ctr'2007
-	gen drobot_`ctr'_1217 = rb_`ctr'2017 - rb_`ctr'2012
-	gen drobot_`ctr'_1722 = rb_`ctr'2022 - rb_`ctr'2017
-	
-	gen drobot_`ctr'_0717 = rb_`ctr'2017 - rb_`ctr'2007
-
-	/*
-	** 총선 
-	gen drobot_`ctr'_1216 = rb_`ctr'2016 - rb_`ctr'2012
-	gen drobot_`ctr'_1220 = rb_`ctr'2020 - rb_`ctr'2012
-	gen drobot_`ctr'_1620 = rb_`ctr'2020 - rb_`ctr'2016
-	*/
-}
-*/
-// save "$data/IFR_robot.dta", replace  
-
-/*
-********************************************************************** 
-* wood & furniture 통합
-********************************************************************** 
-replace newindcode = 118 if newindcode == 119
-replace newind = "other manufacturing" if newindcode == 118
-
-collapse (sum) op_stock delivered, by(year country newindcode newind)
-*/
-
-/*
+* 제조업만 포함 버전 (newindcode 107~119)
+* unclassified(300번) 배분도 제조업 산업끼리만 다시 계산
 **********************************************************************
-* STEP 10: 저장 — Long Difference
-**********************************************************************
-
-* ── 대선 LD ──────────────────────────────────────────────────────────
 preserve
-    keep newindcode newind drobot_sg_0712 drobot_sg_0717 drobot_sg_0722 drobot_sg_1222
-    save "$data/IFR_LD_대선.dta", replace
-restore
+    use "$prof_raw/IFR2023_industry.dta", clear
+    merge m:1 industry using "$prof_raw/RobotInd.dta"
+    drop _merge
+    compress
+    destring newindcode, replace
+    drop delivered
 
-* ── 총선 LD ──────────────────────────────────────────────────────────
-preserve
-    keep newindcode newind drobot_sg_1216 drobot_sg_1220
-    save "$data/IFR_LD_총선.dta", replace
-restore
+    keep if country == "Singapore" | country == "Rep. of Korea"
+    keep if year>=2005
 
+    drop if newindcode==100 | newindcode == 200
+    drop if newindcode==.
+
+    * 제조업(107~119) + unclassified(300)만 남겨서 그 안에서 배분
+    keep if (newindcode>=107 & newindcode<=119) | newindcode==300
+
+    bysort year country: egen tot_opstock_manu = total(op_stock)
+
+    gen is_unclas_manu = (newindcode == 300)
+    bysort year country: egen tot_unclas_manu = total(op_stock * is_unclas_manu)
+    label variable tot_unclas_manu "Total unclassified op_stock (300번, 제조업 기준)"
+
+    bysort year country: egen classified_opstock_manu = total(op_stock * (is_unclas_manu == 0))
+    label variable classified_opstock_manu "Total classified op_stock (제조업, 300번 제외)"
+
+    gen ind_share_opstock_manu = op_stock / classified_opstock_manu if newindcode !=300
+    label variable ind_share_opstock_manu "산업비중: op_stock_j / classified_opstock (제조업 내)"
+
+    gen final_opstock_manu = op_stock + (tot_unclas_manu * ind_share_opstock_manu) if newindcode !=300
+    label variable final_opstock_manu "배분후 최종 op_stock (제조업 내 배분, adjusted)"
+
+    drop if newindcode ==300
+
+    drop country industrycode industry op_stock tot_opstock_manu tot_unclas_manu classified_opstock_manu ind_share_opstock_manu is_unclas_manu
+
+    reshape wide final_opstock_manu, i(year newindcode newind) j(countrycode) string
+    save "$interim/IFR/IFR_long_mfg.dta",replace
+
+    rename final_opstock_manuKR rb_kr_manu
+    rename final_opstock_manuSG rb_sg_manu
+
+    reshape wide rb_kr_manu rb_sg_manu, i(newindcode newind) j(year)
+    save "$interim/IFR/IFR_wide_mfg.dta",replace
+    save "$data/IFR_robot_mfg.dta", replace
+restore
 **********************************************************************
-* STEP 11: 저장 — Stacked Difference
-**********************************************************************
-
-* ── 대선 SD (cohort: 1217, 1722) ─────────────────────────────────────
-preserve
-    keep newindcode newind drobot_sg_1217 drobot_sg_1722
-    reshape long drobot_sg_, i(newindcode newind) j(cohort) string
-    rename drobot_sg_ drobot_sg
-    label variable drobot_sg "ΔRobot_sg (싱가포르, 해당 코호트 구간)"
-    save "$data/IFR_SD_대선.dta", replace
-restore
-
-* ── 총선 SD (cohort: 1216, 1620) ─────────────────────────────────────
-preserve
-    keep newindcode newind drobot_sg_1216 drobot_sg_1620
-    reshape long drobot_sg_, i(newindcode newind) j(cohort) string
-    rename drobot_sg_ drobot_sg
-    label variable drobot_sg "ΔRobot_sg (싱가포르, 해당 코호트 구간)"
-    save "$data/IFR_SD_총선.dta", replace
-restore
-*/

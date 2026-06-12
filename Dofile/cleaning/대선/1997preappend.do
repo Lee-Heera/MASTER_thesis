@@ -114,7 +114,10 @@ collapse (sum) `varlist', by(sido_nm sigungu_nm)
 **********************************************************************
 * ── 공통 ─────────────────────────────────────────────────────────────
 replace sigungu_nm = "미추홀구" if sido_nm=="인천광역시" & sigungu_nm=="남구"
-drop if sigungu_nm == "연기군"
+
+replace sigungu_nm = "세종특별자치시" if sigungu_nm == "연기군"
+replace sido_nm = "세종특별자치시" if sigungu_nm=="세종특별자치시" 
+
 replace sigungu_nm = "여주시"   if sido_nm=="경기도" & sigungu_nm=="여주군"
 
 * ── 창원시 통합: 마산시 + 진해시 → 창원시
