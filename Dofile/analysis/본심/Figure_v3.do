@@ -18,7 +18,9 @@ clear all
 	*/
 	
 ********************************************************************** 
-use "$interim/IFR/IFR_long.dta", replace // unspecified industry -> distributed 
+use "$interim/IFR_figure.dta", replace // unspecified industry -> distributed 
+
+// "$interim/COE_empl_control.dta"
 
 cd  "$output/figure/0607"
 sort newindcode 
@@ -89,53 +91,62 @@ restore
 *       (newind에 들어있는 실제 산업명 문자열과 정확히 일치해야 함)
 * --------------------------------------------------------
 
-* 예시 — 실제 newind 값으로 교체할 것 (공백 포함 가능, 큰따옴표로 각각 감싸기)
-local top5_industries `" "electronics" "automotive" "industrial machinery" "plastics and chemicals" "other manufacturing" "'
+* 위 2단계(방법 B: opstock 증가량 기준)에서 계산된 top5_delta를 그대로 사용
+local top5_industries `top5_delta'
+
+* 색상/패턴 팔레트 (산업 개수만큼 순서대로 사용)
+local colors   navy maroon forest_green orange purple
+local patterns solid dash shortdash dash_dot longdash
 
 preserve
     * 선택된 산업만 남기기 (newind, string 기준 매칭)
-    gen byte _top5 = 0
-
+    * top5_industries 중 실제로 데이터에 존재하는 산업만 순서대로 rank(1..k) 부여
+    * (매칭 안 되는 산업이 있으면 rank에 결번이 생겨 reshape 시 변수가 누락되므로 방지)
     local n : word count `top5_industries'
+
+    gen byte _top5 = 0
+    gen byte rank = .
+    local k = 0
+    local matched_industries ""
     forvalues i = 1/`n' {
         local ind : word `i' of `top5_industries'
-        replace _top5 = 1 if newind == `"`ind'"'
+        quietly count if newind == `"`ind'"'
+        if r(N) > 0 {
+            local ++k
+            replace _top5 = 1 if newind == `"`ind'"'
+            replace rank  = `k' if newind == `"`ind'"'
+            local matched_industries `"`matched_industries' "`ind'""'
+        }
+        else {
+            display as error `"Warning: "`ind'" not found in newind -- skipped"'
+        }
     }
 
     keep if _top5 == 1
+    keep year rank final_opstockKR
 
-    keep newind year final_opstockKR
-	
-
-    * reshape의 j(string) 변수는 공백을 허용하지 않으므로,
-    * 공백/특수문자를 제거한 임시 변수를 만들어 사용
-    gen ind_lbl = subinstr(newind, " ", "", .)
-    drop newind
-
-    reshape wide final_opstockKR, i(year) j(ind_lbl) string
-
-    describe
-	
-
+    * reshape의 j() 변수명 길이 제한(32자)을 피하기 위해 산업명 대신 순위(숫자)를 사용
+    reshape wide final_opstockKR, i(year) j(rank)
 
     * --------------------------------------------------------
-    * 라인 그래프
-    * 주의: 아래 변수명(final_opstockKRAutomotive 등)은 예시이며,
-    *       위 describe 결과에 맞게 직접 수정해야 함
+    * 라인 그래프: matched_industries 순서대로 plot/legend 명령을 동적으로 생성
     * --------------------------------------------------------
-    twoway ///
-        (line final_opstockKRAutomotive    year, lcolor(navy)         lwidth(medthick)) ///
-        (line final_opstockKRElectronics   year, lcolor(maroon)       lwidth(medthick) lpattern(dash)) ///
-        (line final_opstockKRMetalProducts year, lcolor(forest_green) lwidth(medthick) lpattern(shortdash)) ///
-        (line final_opstockKRMachinery     year, lcolor(orange)       lwidth(medthick) lpattern(dash_dot)) ///
-        (line final_opstockKRChemicals     year, lcolor(purple)       lwidth(medthick) lpattern(longdash)) ///
-        , ///
+    local plotcmd ""
+    local legendcmd ""
+    forvalues i = 1/`k' {
+        local ind     : word `i' of `matched_industries'
+        local color   : word `i' of `colors'
+        local pattern : word `i' of `patterns'
+
+        local plotcmd `"`plotcmd' (line final_opstockKR`i' year, lcolor(`color') lwidth(medthick) lpattern(`pattern'))"'
+        local legendcmd `"`legendcmd' `i' "`ind'""'
+    }
+
+    twoway `plotcmd', ///
         title("Robot Operational Stock by Industry (Korea)", size(medium)) ///
         ytitle("Operational Stock") ///
         xtitle("Year") ///
-        legend(order(1 "Automotive" 2 "Electronics" 3 "Metal Products" ///
-                      4 "Machinery" 5 "Chemicals") ///
-               position(6) rows(1) size(small)) ///
+        legend(order(`legendcmd') position(6) rows(1) size(small)) ///
         scheme(s1color)
 
     graph export "robot_stock_top5_KR.png", replace width(1600)

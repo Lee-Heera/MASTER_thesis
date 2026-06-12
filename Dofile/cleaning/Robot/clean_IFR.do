@@ -29,12 +29,17 @@ drop delivered // operatinoal stock만 사용
 
 // 필터링 
 keep if country == "Singapore" | country == "Rep. of Korea"
+
+// figure용 데이터 저장 (year*industry), 1995~2022, unspecified data 이전에 
+save "$interim/IFR_figure.dta" , replace 
+
 keep if year>=2005
 
 tab newindcode, m  // 100=all industries, 200 = metal, unspecified, 300 = unspecified 
 
-drop if newindcode==100 | newindcode == 200 
 drop if newindcode==. 
+
+drop if newindcode==100 | newindcode == 200 
 
 bysort year country: egen tot_opstock = total(op_stock) // unspeicified, classified 포함 total stock 
 
