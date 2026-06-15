@@ -39,6 +39,7 @@ foreach ctr in kr sg {
     gen drobot_`ctr'_1217 = rb_`ctr'2017 - rb_`ctr'2012
     gen drobot_`ctr'_1722 = rb_`ctr'2022 - rb_`ctr'2017
 }
+br if drobot_kr_0712 < 0 
 
 **********************************************************************
 * STEP 2: Bartik X / IV 계산
