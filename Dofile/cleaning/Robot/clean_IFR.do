@@ -23,8 +23,6 @@ merge m:1 industry using "$prof_raw/RobotInd.dta"
 tab _merge // all matched 
 drop _merge 
 
-save "$interim/IFR_figure.dta" , replace  // Figure용 
-
 compress 
 destring newindcode, replace 
 drop delivered // operatinoal stock만 사용 

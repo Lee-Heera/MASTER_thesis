@@ -22,7 +22,7 @@ use "$data/kor_empl.dta"
 merge m:1 newindcode using "$data/sgp_empl.dta" , nogen assert(3)
 
 merge m:1 newindcode using "$data/IFR_robot.dta", nogen assert(3)
-// IFR_robot1.dta s
+// IFR_robot1.dta 
 
 **********************************************************************
 * 대선 연도와 구간에 맞춰서 만들기 
@@ -39,7 +39,27 @@ foreach ctr in kr sg {
     gen drobot_`ctr'_1217 = rb_`ctr'2017 - rb_`ctr'2012
     gen drobot_`ctr'_1722 = rb_`ctr'2022 - rb_`ctr'2017
 }
+**********************************************************************
+* STEP 1-2: drobot만 따로 stacked SD 변수 생성 (Bartik 집계 X/IV 이전)
+*  - X_SD2005/IV_SD2005와 동일한 cohort-year 매칭 방식
+*    (2007행 <- 0712, 2012행 <- 1217, 2017행 <- 1722)
+**********************************************************************
+local sd_specs 0712 1217 1722
+local sd_bases 2007 2012 2017
+local n : word count `sd_specs'
+
+foreach ctr in kr sg {
+    gen drobot_`ctr'_SD = .
+    forvalues i = 1/`n' {
+        local sp : word `i' of `sd_specs'
+        local by : word `i' of `sd_bases'
+        replace drobot_`ctr'_SD = drobot_`ctr'_`sp' if year == `by'
+    }
+    label variable drobot_`ctr'_SD "Delta robot stock (`ctr', SD stacked: cohort 2007/2012/2017)"
+}
+
 br if drobot_kr_0712 < 0 
+//save "$data/X_final_beforeduplicates.dta" ,replace 
 
 **********************************************************************
 * STEP 2: Bartik X / IV 계산
@@ -59,6 +79,7 @@ foreach base_emp in 2005{
         * X (Korean shock, share & emp base = base_emp)
         gen _term = share`base_emp' * drobot_kr_`sp' / emp_j`base_emp'
         bysort year regioncode: egen _X = total(_term)
+		
         drop _term
         gen X`base_emp'_`sp' = _X if year == `by'
         drop _X

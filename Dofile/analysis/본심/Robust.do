@@ -24,12 +24,36 @@ global fixed i.year
 global control aged_share college_share 
 global additional immi_share manu_share migra_share 
 *******************************************************************************
-* controlling for pretrend 용 변수 
+
+* controlling for pretrend 용 변수
 * SD pretrend: 각 코호트의 직전 SD값 (bysort로 lag)
 foreach v in SD_conserv1_p SD_conserv2_p SD_turnout {
     bysort regioncode (year): gen pre_`v' = `v'[_n-1]
     label variable pre_`v' "Pretrend `v' for SD (prev cohort SD)"
 }
+
+/*
+*******************************************************************************
+* Placebo pretrend test 용 변수 (Acemoglu & Restrepo 방식)
+* cohort별 exposure(IV)는 그대로 두고, 그 이전 여러 구간의 outcome 변화량(SD_v_sp)을
+* region-level 상수로 broadcast해서 cross-sectional(region FE 없이) 회귀에 사용
+*******************************************************************************
+* (1) cohort별 IV를 region-level 상수로 broadcast
+foreach yr in 2007 2012 2017 {
+    foreach ivv in IV_SD2005 IV_SD2005_mfg {
+        gen `ivv'_`yr'_tmp = `ivv' if year==`yr'
+        bysort regioncode: egen bc_`ivv'_`yr' = mean(`ivv'_`yr'_tmp)
+        drop `ivv'_`yr'_tmp
+    }
+}
+
+* (2) 과거 구간별 SD 변화량을 region-level 상수로 broadcast
+foreach v in turnout conserv1_p {
+    foreach sp in 9297 9702 0207 0712 1217 {
+        bysort regioncode: egen bc_SD_`v'_`sp' = mean(SD_`v'_`sp')
+    }
+}
+*/
 
 cd "$main/Output/table/0607"
 log using "robust.smcl", replace
@@ -55,31 +79,58 @@ esttab fir* using "valid_first.csv", replace ///
     b(%8.3f) se(%8.3f) ///
     star(* 0.10 ** 0.05 *** 0.01) ///
     label nogap
-	
-* Pretrend check 
-est clear 
 
-reg pre_SD_turnout IV_SD2005  if year==2007, cluster(regioncode) 
-est store pre1
-reg pre_SD_conserv1_p IV_SD2005 if year==2007, cluster(regioncode) 
-est store pre2
+* Pretrend check (cohort별로 따로 검정: 2007/2012/2017)
+est clear
 
-// control 추가 
-reg pre_SD_turnout IV_SD2005 $control  if year==2007 , cluster(regioncode) 
-est store pre7
-reg pre_SD_conserv1_p IV_SD2005 $control  if year==2007, cluster(regioncode)
-est store pre8
-	
-esttab pre* using "valid_pretrend.csv", replace ///
-    mtitles("(1)" "(2)" "(3)" "(4)") ///
-    mgroups("Pretrend check", pattern(1 0)) ///
+reg pre_SD_turnout IV_SD2005 if year==2007, cluster(regioncode)
+est store m1 
+
+reg pre_SD_conserv1_p IV_SD2005 if year==2007, cluster(regioncode)
+est store m2 
+
+reg pre_SD_turnout IV_SD2005 $control if year==2007, cluster(regioncode)
+est store m3 
+
+reg pre_SD_conserv1_p IV_SD2005 $control if year==2007, cluster(regioncode)
+est store m4 
+
+esttab m* using "valid_pretrend.csv", replace ///
+    mtitles("(1)" "(2)" "(3)") ///
+    mgroups("First-stage", pattern(1 0)) ///
     stats(N F r2, fmt(0 3) labels("Observations" "F-statistics" "R-squared")) ///
     b(%8.3f) se(%8.3f) ///
     star(* 0.10 ** 0.05 *** 0.01) ///
-    label nogap 
-	
-* balance test 
-reg IV_SD2005 aged_share college_share immi_share manu_share2 if year==2007, cluster(regioncode)
+    label nogap
+
+
+/*
+foreach yr in 2007 2012 2017 {
+    reg pre_SD_turnout IV_SD2005  if year==`yr', cluster(regioncode)
+    est store pre_turnout_`yr'
+    reg pre_SD_conserv1_p IV_SD2005 if year==`yr', cluster(regioncode)
+    est store pre_conserv1_`yr'
+
+    // control 추가
+    reg pre_SD_turnout IV_SD2005 $control  if year==`yr' , cluster(regioncode)
+    est store pre_turnout_ctrl_`yr'
+    reg pre_SD_conserv1_p IV_SD2005 $control  if year==`yr', cluster(regioncode)
+    est store pre_conserv1_ctrl_`yr'
+}
+
+esttab pre_turnout_2007 pre_conserv1_2007 pre_turnout_ctrl_2007 pre_conserv1_ctrl_2007 ///
+       pre_turnout_2012 pre_conserv1_2012 pre_turnout_ctrl_2012 pre_conserv1_ctrl_2012 ///
+       pre_turnout_2017 pre_conserv1_2017 pre_turnout_ctrl_2017 pre_conserv1_ctrl_2017 ///
+       using "valid_pretrend.csv", replace ///
+    mtitles("(1)" "(2)" "(3)" "(4)" "(5)" "(6)" "(7)" "(8)" "(9)" "(10)" "(11)" "(12)") ///
+    mgroups("2007 cohort" "2012 cohort" "2017 cohort", pattern(1 0 0 0 1 0 0 0 1 0 0 0)) ///
+    stats(N F r2, fmt(0 3) labels("Observations" "F-statistics" "R-squared")) ///
+    b(%8.3f) se(%8.3f) ///
+    star(* 0.10 ** 0.05 *** 0.01) ///
+    label nogap
+*/
+* balance test
+//reg IV_SD2005 aged_share college_share immi_share manu_share2 if year==2007, cluster(regioncode)
 
 
 *******************************************************************************
@@ -104,15 +155,6 @@ xi: xtivreg2 SD_conserv1_p $fixed $control $additional pre_SD_conserv1_p (X_SD20
 cluster(regioncode) robust first fe
 est store m4
 
-/*
-xi: xtivreg2 SD_turnout  $fixed $control $additional pre_SD_turnout migra_share (X_SD2005  = IV_SD2005) if sample==1, ///
-cluster(regioncode) robust first fe 
-est store m5
-
-xi: xtivreg2 SD_conserv1_p $fixed $control $additional pre_SD_conserv1_p migra_share (X_SD2005  = IV_SD2005) if sample==1, ///
-cluster(regioncode) robust first fe
-est store m6
-*/
 esttab m* using "robust_addtional.csv", replace ///
     mtitles("(1)" "(2)" "(3)" "(4)") ///
     mgroups("Robustness_additional", pattern(1 0)) ///
@@ -121,6 +163,7 @@ esttab m* using "robust_addtional.csv", replace ///
     star(* 0.10 ** 0.05 *** 0.01) ///
     label nogap 
 
+	/*
 *******************************************************************************
 * Manufacturing IV, X 
 *******************************************************************************
@@ -129,10 +172,10 @@ esttab m* using "robust_addtional.csv", replace ///
 * First-stage relationship 
 // gen sample= (year>=2007 & year<=2017)
 est clear 
-xtreg X_SD2005_mfg  IV_SD2005_mfg if sample==1, cluster(regioncode) fe // region FE 
+xtreg X_SD2005_mfg IV_SD2005_mfg if sample==1, cluster(regioncode) fe // region FE 
 est store fir1 
 
-xtreg X_SD2005_mfg  IV_SD2005_mfg  $fixed if sample==1 , cluster(regioncode) fe // year FE 
+xtreg X_SD2005_mfg IV_SD2005_mfg  $fixed if sample==1 , cluster(regioncode) fe // year FE 
 est store fir2 
 
 xtreg X_SD2005_mfg IV_SD2005_mfg $fixed $control if sample==1 , cluster(regioncode) fe // control 추가 
@@ -145,39 +188,66 @@ esttab fir* using "valid_first_mfg.csv", replace ///
     b(%8.3f) se(%8.3f) ///
     star(* 0.10 ** 0.05 *** 0.01) ///
     label nogap
-	
-* Pretrend check 
-est clear 
 
-reg pre_SD_turnout IV_SD2005_mfg  if year==2007, cluster(regioncode) 
-est store pre1
-reg pre_SD_conserv1_p IV_SD2005_mfg if year==2007, cluster(regioncode) 
-est store pre2
 
-// control 추가 
-reg pre_SD_turnout IV_SD2005_mfg $control  if year==2007 , cluster(regioncode) 
-est store pre7
-reg pre_SD_conserv1_p IV_SD2005_mfg $control  if year==2007, cluster(regioncode)
-est store pre8
-	
-esttab pre* using "valid_pretrend_mfg.csv", replace ///
-    mtitles("(1)" "(2)" "(3)" "(4)") ///
-    mgroups("Pretrend check", pattern(1 0)) ///
+* Pretrend check (cohort별로 따로 검정: 2007/2012/2017)
+est clear
+
+est clear
+
+reg pre_SD_turnout IV_SD2005_mfg if year==2007, cluster(regioncode)
+est store m1 
+
+reg pre_SD_conserv1_p IV_SD2005_mfg if year==2007, cluster(regioncode)
+est store m2 
+
+reg pre_SD_turnout IV_SD2005_mfg $control if year==2007, cluster(regioncode)
+est store m3 
+
+reg pre_SD_conserv1_p IV_SD2005_mfg $control if year==2007, cluster(regioncode)
+est store m4 
+
+esttab m* using "valid_pretrend_mfg.csv", replace ///
+    mtitles("(1)" "(2)" "(3)") ///
+    mgroups("First-stage", pattern(1 0)) ///
     stats(N F r2, fmt(0 3) labels("Observations" "F-statistics" "R-squared")) ///
     b(%8.3f) se(%8.3f) ///
     star(* 0.10 ** 0.05 *** 0.01) ///
-    label nogap 
+	label nogap
+*/
 	
-* balance test 
-reg IV_SD2005 aged_share college_share immi_share manu_share2 if year==2007, cluster(regioncode)
+/*
+foreach yr in 2007 2012 2017 {
+    reg pre_SD_turnout IV_SD2005_mfg  if year==`yr', cluster(regioncode)
+    est store pre_turnout_`yr'
+    reg pre_SD_conserv1_p IV_SD2005_mfg if year==`yr', cluster(regioncode)
+    est store pre_conserv1_`yr'
 
+    // control 추가
+    reg pre_SD_turnout IV_SD2005_mfg $control  if year==`yr' , cluster(regioncode)
+    est store pre_turnout_ctrl_`yr'
+    reg pre_SD_conserv1_p IV_SD2005_mfg $control  if year==`yr', cluster(regioncode)
+    est store pre_conserv1_ctrl_`yr'
+}
 
+esttab pre_turnout_2007 pre_conserv1_2007 pre_turnout_ctrl_2007 pre_conserv1_ctrl_2007 ///
+       pre_turnout_2012 pre_conserv1_2012 pre_turnout_ctrl_2012 pre_conserv1_ctrl_2012 ///
+       pre_turnout_2017 pre_conserv1_2017 pre_turnout_ctrl_2017 pre_conserv1_ctrl_2017 ///
+       using "valid_pretrend_mfg.csv", replace ///
+    mtitles("(1)" "(2)" "(3)" "(4)" "(5)" "(6)" "(7)" "(8)" "(9)" "(10)" "(11)" "(12)") ///
+    mgroups("2007 cohort" "2012 cohort" "2017 cohort", pattern(1 0 0 0 1 0 0 0 1 0 0 0)) ///
+    stats(N F r2, fmt(0 3) labels("Observations" "F-statistics" "R-squared")) ///
+    b(%8.3f) se(%8.3f) ///
+    star(* 0.10 ** 0.05 *** 0.01) ///
+    label nogap
+*/
+/*
 *******************************************************************************
-* Robustness check 
+* Robustness check
 *******************************************************************************
-* Additional controls 
-est clear 
-// add controls 
+* Additional controls
+est clear
+// add controls
 xi: xtivreg2 SD_turnout  $fixed $control $additional (X_SD2005_mfg  = IV_SD2005_mfg) if sample==1, ///
 cluster(regioncode) robust first fe 
 est store m1
@@ -194,16 +264,6 @@ xi: xtivreg2 SD_conserv1_p $fixed $control $additional pre_SD_conserv1_p (X_SD20
 cluster(regioncode) robust first fe
 est store m4
 
-/*
-xi: xtivreg2 SD_turnout  $fixed $control $additional pre_SD_turnout migra_share (X_SD2005_mfg  = IV_SD2005_mfg) if sample==1, ///
-cluster(regioncode) robust first fe 
-est store m5
-
-xi: xtivreg2 SD_conserv1_p $fixed $control $additional pre_SD_conserv1_p migra_share (X_SD2005_mfg  = IV_SD2005_mfg) if sample==1, ///
-cluster(regioncode) robust first fe
-est store m6
-*/
-
 esttab m* using "robust_addtional_mfg.csv", replace ///
     mtitles("(1)" "(2)" "(3)" "(4)") ///
     mgroups("Robustness_additional", pattern(1 0)) ///
@@ -211,45 +271,6 @@ esttab m* using "robust_addtional_mfg.csv", replace ///
     b(%8.3f) se(%8.3f) ///
     star(* 0.10 ** 0.05 *** 0.01) ///
     label nogap 
+*/
 
 log close 
-
-/*
-ivreg2 SD_conserv1_p_1217 (X_SD2005  = IV_SD2005) if year==2012, ///
-cluster(regioncode) robust first
-
-ivreg2 SD_conserv1_p_1722 (X_SD2005  = IV_SD2005) if year==2017, ///
-cluster(regioncode) robust first
-*/
-
-	/*
-* alternative two-party vote share 
-est clear 
-
-xi: xtivreg2 SD_conserv2_p $fixed $control (X_SD2005  = IV_SD2005) if sample==1, ///
-cluster(regioncode) robust first fe
-est store m1
-
-xi: xtivreg2 SD_conserv2_p $fixed $control $additional (X_SD2005  = IV_SD2005) if sample==1, ///
-cluster(regioncode) robust first fe
-est store m2
-
-xi: xtivreg2 SD_conserv2_p $fixed $control $additional pre_SD_conserv2_p (X_SD2005  = IV_SD2005) if sample==1, ///
-cluster(regioncode) robust first fe
-est store m3
-
-esttab m*,  stats(N r2 cdf widstat arf arfp, fmt(0 3)) ///
-    b(%8.3f) se(%8.3f) ///
-    star(* 0.10 ** 0.05 *** 0.01) 
-	
-
-
-esttab m* using "main2.csv", ///
-	replace /// 
-	mgroups("Main2", pattern(1 0)) ///
-    stats(N r2 cdf widstat arf arfp, fmt(0 3)) ///
-    b(%8.3f) se(%8.3f) ///
-    star(* 0.10 ** 0.05 *** 0.01) ///
-    label nogap 
-
-*/

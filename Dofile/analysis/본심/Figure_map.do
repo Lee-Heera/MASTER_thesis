@@ -106,3 +106,70 @@ preserve
         title("", size(medium))
     graph export "map_LD_X_0722.pdf", replace //width(2000) height(2400)
 restore
+
+/*
+**********************************************************************
+* 3. SD (Short Difference) 지도: 2007-12 / 2012-17 / 2017-22
+*    - cohort(2007/2012/2017)별로 SD_turnout_`sp', SD_conserv1_p_`sp', X_SD2005 사용
+*    - (A) 기간별 개별 지도, (B) 3개 기간을 한 화면에 묶은 3-panel 지도 둘 다 생성
+**********************************************************************
+local sd_specs  0712      1217      1722
+local sd_years  2007      2012      2017
+local sd_labels 2007-2012 2012-2017 2017-2022
+
+local n : word count `sd_specs'
+forvalues i = 1/`n' {
+    local sp  : word `i' of `sd_specs'
+    local yr  : word `i' of `sd_years'
+    local lbl : word `i' of `sd_labels'
+
+    preserve
+        keep if year == `yr'
+        drop if inlist(sigungu_cd, 39010, 39020)
+
+        * 자동화 가설: 자동화 ↑ -> 투표율 변화(SD_turnout) ↓ => Blues 반전
+        spmap SD_turnout_`sp' using "`coord'", id(id) ///
+            fcolor("8 81 156" "49 130 189" "107 174 214" "189 215 231" "239 243 255") ///
+            clmethod(quantile) clnumber(5) ///
+            legend(position(5) size(*0.8)) ///
+            title("`lbl'", size(medium)) ///
+            name(sd_turnout_`sp', replace)
+        graph export "map_SD_turnout_`sp'.pdf", replace name(sd_turnout_`sp')
+
+        spmap SD_conserv1_p_`sp' using "`coord'", id(id) ///
+            fcolor(Blues) clmethod(quantile) clnumber(5) ///
+            legend(position(5) size(*0.8)) ///
+            title("`lbl'", size(medium)) ///
+            name(sd_conserv1_`sp', replace)
+        graph export "map_SD_conserv1_p_`sp'.pdf", replace name(sd_conserv1_`sp')
+
+        spmap X_SD2005 using "`coord'", id(id) ///
+            fcolor(Blues) clmethod(quantile) clnumber(5) ///
+            legend(position(5) size(*0.8)) ///
+            title("`lbl'", size(medium)) ///
+            name(sd_X_`sp', replace)
+        graph export "map_SD_X_`sp'.pdf", replace name(sd_X_`sp')
+    restore
+}
+
+**********************************************************************
+* 3-panel 결합 지도 (2007-12 / 2012-17 / 2017-22 한 화면)
+**********************************************************************
+graph combine sd_turnout_0712 sd_turnout_1217 sd_turnout_1722, ///
+    rows(1) iscale(*0.9) ///
+    title("SD Turnout: 2007-2012 / 2012-2017 / 2017-2022", size(medium)) ///
+    name(sd_turnout_combined, replace)
+graph export "map_SD_turnout_combined.pdf", replace name(sd_turnout_combined)
+
+graph combine sd_conserv1_0712 sd_conserv1_1217 sd_conserv1_1722, ///
+    rows(1) iscale(*0.9) ///
+    title("SD Conservative Vote Share: 2007-2012 / 2012-2017 / 2017-2022", size(medium)) ///
+    name(sd_conserv1_combined, replace)
+graph export "map_SD_conserv1_p_combined.pdf", replace name(sd_conserv1_combined)
+
+graph combine sd_X_0712 sd_X_1217 sd_X_1722, ///
+    rows(1) iscale(*0.9) ///
+    title("Robot Exposure (X_SD2005): 2007-2012 / 2012-2017 / 2017-2022", size(medium)) ///
+    name(sd_X_combined, replace)
+graph export "map_SD_X_combined.pdf", replace name(sd_X_combined)
+*/

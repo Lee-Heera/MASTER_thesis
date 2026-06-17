@@ -23,6 +23,12 @@ tab year // 2007, 2012, 2017, 2022
 sort regioncode year 
 xtset regioncode year  // 
 *******************************************************************************
+/*
+replace SD_conserv1_p = SD_conserv1_p*100 
+replace SD_conserv2_p = SD_conserv2_p*100 
+replace SD_turnout =  SD_turnout*100 
+*/
+
 * construct the migration share 
 gen migra_share = pop_migra/pop // 음수는 유출인구 증가한다는 의미, 양수는 유입인구 
 
@@ -241,6 +247,8 @@ esttab m*, stats(N r2 cdf widstat arf arfp, fmt(0 3)) ///
     b(%8.3f) se(%8.3f) ///
     star(* 0.10 ** 0.05 *** 0.01) ///
     label nogap 
+	
+	/*
 *************************************************************************
 * Manufacturing X, IV 
 **************************************************************************
@@ -417,6 +425,7 @@ esttab m*, stats(N r2 cdf widstat arf arfp, fmt(0 3)) ///
     b(%8.3f) se(%8.3f) ///
     star(* 0.10 ** 0.05 *** 0.01) ///
     label nogap 
+*/
 
 log close 
 
