@@ -87,24 +87,33 @@ preserve
 	
     * 자동화 가설: 자동화 ↑ -> 투표율 변화(LD_turnout) ↓
     * => 값이 낮을수록 가설과 일치 -> 낮은 값 = 진한색이 되도록 Blues 색상순서 반전
-    spmap LD_turnout_0722 using "`coord'", id(id) ///
-        fcolor("8 81 156" "49 130 189" "107 174 214" "189 215 231" "239 243 255") ///
-        clmethod(quantile) clnumber(5) ///
+    spmap X_LD2005_0722 using "`coord'", id(id) ///
+        fcolor(Blues) clmethod(quantile) clnumber(5) ///
         legend(position(5) size(*0.8)) ///
         title("", size(medium))
-    graph export "map_LD_turnout_0722.pdf", replace // width(2000) height(2400)
-
+    graph export "map_LD_X_0722.pdf", replace //width(2000) height(2400)
+	
+	spmap manu_share using "`coord'", id(id) ///
+        fcolor(Blues) clmethod(quantile) clnumber(5) ///
+        legend(position(5) size(*0.8)) ///
+        title("", size(medium))
+    graph export "map_manufacturing_2007.pdf", replace //width(2000) height(2400)
+	
+	/*
     spmap LD_conserv1_p_0722 using "`coord'", id(id) ///
         fcolor(Blues) clmethod(quantile) clnumber(5) ///
         legend(position(5) size(*0.8)) ///
         title("", size(medium))
     graph export "map_LD_conserv1_p_0722.pdf", replace //width(2000) height(2400)
 	
-	spmap X_LD2005_0722 using "`coord'", id(id) ///
-        fcolor(Blues) clmethod(quantile) clnumber(5) ///
+	spmap LD_turnout_0722 using "`coord'", id(id) ///
+        fcolor("8 81 156" "49 130 189" "107 174 214" "189 215 231" "239 243 255") ///
+        clmethod(quantile) clnumber(5) ///
         legend(position(5) size(*0.8)) ///
         title("", size(medium))
-    graph export "map_LD_X_0722.pdf", replace //width(2000) height(2400)
+    graph export "map_LD_turnout_0722.pdf", replace // width(2000) height(2400)
+
+	*/
 restore
 
 /*

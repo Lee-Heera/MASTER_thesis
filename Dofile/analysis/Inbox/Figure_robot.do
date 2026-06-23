@@ -1,205 +1,257 @@
-**********************************************************************
-* Robot exposure & employment share panel (newindcode x year)
-* - IFR_figure.dta (KR, unspecified 배분 전 raw op_stock) + COE_empl_control.dta(KLIPS 고용) merge
-* - Figure_v3.do의 robot/emp exposure, employment share 그래프용 입력 데이터 생성
+**********************************************************************  
+* Robot and automation
+* Singapore Employment Statistics clean do-file
 **********************************************************************
 clear all
 
 	global main "/Users/ihuila/Research/MASTER_thesis"
 	global data "${main}/Data cleaned"
 	global interim "${main}/Data interim"
+	global final "${main}/Data final"
+	global prof_raw "${main}/Data raw/professor_raw"	
 	global output "${main}/Output"
+	/*
+	global ifr "${main}/Data raw/IFR"
+	global kepco  "${main}/Data raw/KEPCO"
+	global oarlr "${main}/Data raw/OARLR"
+	global singapore "${main}/Data raw/Singapore"
+	*/
+*******************************************************************************
+* 1) change in the stock of robot 
+* 2) stock of robot in 2007 
+**********************************************************************
+use "$prof_raw/IFR2023_industry.dta" 
+
+merge m:1 industry using "$prof_raw/RobotInd.dta"
+tab _merge // all matched 
+drop _merge 
 
 **********************************************************************
-* 1. 산업별 고용 패널: COE_empl_control (region-industry-year, long) -> newindcode x year
+* 1) Korea / Singapore만 남기기
 **********************************************************************
-use "$interim/COE_empl_control.dta", clear
+tab country   // 실제 국가명 표기 확인 (예: "Korea, Rep." / "Republic of Korea" 등) 후 아래 replace 조건 수정
 
-* emp_jt = 산업 j, 연도 t의 전국 총고용 (region별 행에 동일 값이 반복되어 있음)
-keep year newindcode newind emp_jt
-duplicates drop
-isid newindcode year
+gen ctr = ""
+replace ctr = "kr" if countrycode=="KR"     // 실제 값에 맞게 수정
+replace ctr = "sg" if countrycode == "SG"  // 실제 값에 맞게 수정
+keep if inlist(ctr, "kr", "sg")
 
-rename emp_jt emp_j
+keep if newindcode >=101 & newindcode<=119
+**********************************************************************
+* industry_label (Table 8 라벨링)
+**********************************************************************
+     gen industry_label = newind
 
-* 산업별 고용 비중 (employment share)
-bysort year: egen total_emp = total(emp_j)
-gen emp_share = emp_j / total_emp
+    replace industry_label = "Agriculture"                 if newindcode == 101  // agriculture, forestry, and fishing
+    replace industry_label = "Mining"                      if newindcode == 102  // mining
+    replace industry_label = "Utilities"                   if newindcode == 103  // utility
+    replace industry_label = "Construction"                if newindcode == 104  // construction
+    replace industry_label = "Education and research"      if newindcode == 105  // education, research, and development
+    replace industry_label = "Services"                    if newindcode == 106  // services
+    replace industry_label = "Food and beverages"          if newindcode == 107  // food and beverages
+    replace industry_label = "Textiles"                    if newindcode == 108  // textiles (including apparel)
+    replace industry_label = "Paper and printing"          if newindcode == 109  // paper and printing
+    replace industry_label = "Plastics and chemicals"      if newindcode == 110  // plastics and chemicals
+    replace industry_label = "Minerals"                    if newindcode == 111  // minerals
+    replace industry_label = "Basic metals"                if newindcode == 112  // basic metals
+    replace industry_label = "Metal products"              if newindcode == 113  // metal products
+    replace industry_label = "Industrial machinery"         if newindcode == 114  // industrial machinery
+    replace industry_label = "Electronics"                 if newindcode == 115  // electronics
+    replace industry_label = "Automotive"                  if newindcode == 116  // automotive
+    replace industry_label = "Shipbuilding and aerospace"  if newindcode == 117  // other vehicles (shipbuilding and aerospace)
+    replace industry_label = "Other manufacturing"  if newindcode == 118  // other manufacturing
+    replace industry_label = "Wood and furniture"  if newindcode == 119  // wood and furniture
 
-tempfile emp_panel
-save `emp_panel'
+keep newindcode industry_label ctr year op_stock
+tempfile base
+save `base'
 
 **********************************************************************
-* 2. IFR robot stock (한국, unspecified 배분 전 raw op_stock) -> newindcode x year
+* 2) 2007년 기준 Robot stock 비교: Korea vs Singapore (Table만)
 **********************************************************************
-use "$interim/IFR_figure.dta", clear
-
-keep if country == "Rep. of Korea" 
-keep if newindcode >= 101 & newindcode <= 119   // all industries(100)/unspecified(200,300) 제외
-
-keep year newindcode newind op_stock
-rename op_stock robot_stock_raw
-
-**********************************************************************
-* 3. merge -> robot exposure 계산
-**********************************************************************
-* IFR_figure: newindcode x year (1993-2022, KR), emp_panel: newindcode x year (1995-2022)
-* -> 겹치는 1995-2022만 사용
-merge 1:1 newindcode year using `emp_panel', keep(match) nogen
-
-* robot exposure: 노동자 1,000명당 로봇 수 (unspecified 배분 전 raw op_stock 기준)
-* emp_j는 이미 1,000명 단위(원데이터에서 /1000)이므로 그대로 나누면 robots per 1,000 workers
-gen robot_exposure = robot_stock_raw / emp_j
-
-order newindcode newind year robot_stock_raw emp_j emp_share robot_exposure
-sort newindcode year
-
-save "$interim/Figure_merged.dta", replace
-
-*********************************************************************************
-use "$interim/Figure_merged.dta", clear
-
-cd "$output/figure/0607"
-sort newindcode year
-
-* 색상/패턴 팔레트 (산업 개수만큼 순서대로 사용)
-local colors   navy maroon forest_green orange purple teal
-local patterns solid dash shortdash dash_dot longdash
-
-* --------------------------------------------------------
-* Top-5 / Bottom-3 산업 선정: robot_stock_raw 증가량(최초연도 -> 최종연도) 기준
-* --------------------------------------------------------
-quietly summarize year
-local minyear = r(min)
-local maxyear = r(max)
-
 preserve
-    keep newindcode newind year robot_stock_raw emp_share
-    reshape wide robot_stock_raw emp_share, i(newindcode newind) j(year)
+    keep if year == 2007
+    keep newindcode industry_label ctr op_stock
 
-    gen delta_robot = robot_stock_raw`maxyear' - robot_stock_raw`minyear'
-    gen delta_share = emp_share`maxyear'      - emp_share`minyear'
+    reshape wide op_stock, i(newindcode industry_label) j(ctr) string
+    rename op_stockkr kr_stock
+    rename op_stocksg sg_stock
 
-    gsort -delta_robot
-    list newindcode newind delta_robot, sep(0)
+    quietly corr kr_stock sg_stock
+    local r = r(rho)
+    local n = r(N)
+    local t = `r' * sqrt((`n'-2)/(1-`r'^2))
+    local p = 2*ttail(`n'-2, abs(`t'))
 
-    local top5 ""
-    forvalues r = 1/5 {
-        local ind = newind[`r']
-        local top5 `"`top5' "`ind'""'
-    }
-    display `"Top-5 industries (robot stock increase, `minyear'-`maxyear'): `top5'"'
+    tostring kr_stock sg_stock, replace force format(%9.2f)
+    local nobs = _N + 1
+    set obs `nobs'
+    replace industry_label = "Correlation coefficient" in `nobs'
+    replace kr_stock = string(`r', "%9.4f") in `nobs'
+    replace sg_stock = "(p value = " + string(`p', "%9.4f") + ")" in `nobs'
 
-    * robot stock 증가량 최하위 3개 산업 (Bottom-3)
-    local N = _N
-    local bottom3 ""
-    forvalues r = 0/2 {
-        local ind = newind[`N' - `r']
-        local bottom3 `"`bottom3' "`ind'""'
-    }
-    display `"Bottom-3 industries (robot stock increase, `minyear'-`maxyear'): `bottom3'"'
+    export excel industry_label kr_stock sg_stock ///
+        using "robot_stock_2007_table.xlsx", ///
+        replace firstrow(variables) sheet("robot_stock_2007")
 restore
 
-* --------------------------------------------------------
-* top5 산업에 rank(1..k) 부여 + plot/legend 명령 동적 생성
-* --------------------------------------------------------
-local n : word count `top5'
+**********************************************************************
+* 3) Robot stock 변화량 (Short Difference): newindcode x period 패널로 직접 생성
+**********************************************************************
+use `base', clear
+keep if inlist(year, 2007, 2012, 2017, 2022)
 
-gen byte rank = .
-local k = 0
-local matched ""
-forvalues i = 1/`n' {
-    local ind : word `i' of `top5'
-    quietly count if newind == `"`ind'"'
-    if r(N) > 0 {
-        local ++k
-        replace rank = `k' if newind == `"`ind'"'
-        local matched `"`matched' "`ind'""'
-    }
-    else {
-        display as error `"Warning: "`ind'" not found in newind -- skipped"'
-    }
+* newindcode + ctr 묶어서 패널 단위(unit) 생성
+egen unit = group(newindcode ctr)
+sort unit year
+
+* 2007->2012->2017->2022, 모두 5년 간격이므로 delta(5)로 tsset
+tsset unit year, delta(5)
+
+* 직전 기간 대비 차분 (2012행=07-12, 2017행=12-17, 2022행=17-22)
+gen drobot = D.op_stock
+
+* 기간 라벨 생성
+gen period = ""
+replace period = "0712" if year == 2012
+replace period = "1217" if year == 2017
+replace period = "1722" if year == 2022
+
+drop if missing(drobot)   // 2007행(직전 값 없어 차분 불가)은 제거
+
+keep newindcode industry_label ctr period drobot
+
+* ctr -> wide (kr/sg 분리) : newindcode x period 패널 완성
+reshape wide drobot, i(newindcode industry_label period) j(ctr) string
+rename drobotkr drobot_kr
+rename drobotsg drobot_sg
+
+tempfile delta
+save `delta'
+
+**********************************************************************
+* 기간별로 Table만 생성 (Figure 없음)
+**********************************************************************
+foreach sp in 0712 1217 1722 {
+    use `delta', clear
+    keep if period == "`sp'"
+    keep newindcode industry_label drobot_kr drobot_sg
+
+    quietly corr drobot_kr drobot_sg
+    local r = r(rho)
+    local n = r(N)
+    local t = `r' * sqrt((`n'-2)/(1-`r'^2))
+    local p = 2*ttail(`n'-2, abs(`t'))
+
+    tostring drobot_kr drobot_sg, replace force format(%9.2f)
+    local nobs = _N + 1
+    set obs `nobs'
+    replace industry_label = "Correlation coefficient" in `nobs'
+    replace drobot_kr = string(`r', "%9.4f") in `nobs'
+    replace drobot_sg = "(p value = " + string(`p', "%9.4f") + ")" in `nobs'
+
+    export excel industry_label drobot_kr drobot_sg ///
+        using "drobot_`sp'_table.xlsx", ///
+        replace firstrow(variables) sheet("drobot_`sp'")
 }
 
+********************************************************************* 
+* Figure 
+**********************************************************************
+* 공통 준비: share 계산 + Top5 산업 정의 (KR+SG 합산, 2007년 기준)
+**********************************************************************
+use `base', clear
+bysort ctr year: egen total_stock = total(op_stock)
+gen share = op_stock / total_stock
 
-* --------------------------------------------------------
-* Top3(rank 1-3) robot stock level plot/legend 생성 (색상 + 선모양으로 구분)
-* --------------------------------------------------------
-local plot_robot_hl ""
-local legendcmd_robot_hl ""
-forvalues i = 1/3 {
-    local ind     : word `i' of `matched'
-    local ind     = strtrim("`ind'")
-    local color   : word `i' of `colors'
-    local pattern : word `i' of `patterns'
-    local plot_robot_hl `"`plot_robot_hl' (line robot_stock_raw`i' year, lcolor(`color') lwidth(medthick) lpattern(`pattern'))"'
-    local legendcmd_robot_hl `"`legendcmd_robot_hl' `i' "`ind'""'
-}
-
-
-* --------------------------------------------------------
-* 그래프 1: robot stock 증가량(1995->2022 long difference) 기준 Top3 산업의 robot stock(level) 트렌드
-* --------------------------------------------------------
 preserve
-    keep if rank <= 3
-    keep year rank robot_stock_raw
-    reshape wide robot_stock_raw, i(year) j(rank)
-
-    * y축 라벨 길이로 인한 ytitle 겹침 방지: 천 단위로 스케일
-    forvalues i = 1/3 {
-        replace robot_stock_raw`i' = robot_stock_raw`i' / 1000
-    }
-
-    twoway `plot_robot_hl', ///
-        title("", size(medium)) ///
-        ytitle("Robot Stock (thousands)", size(small) margin(r+3)) ///
-        xtitle("Year", size(small)) ///
-        legend(order(`legendcmd_robot_hl') position(6) rows(1) size(small) region(lcolor(none))) ///
-        graphregion(color(white)) plotregion(color(white)) ///
-        scheme(s2color)
-    graph export "robot_stock_top3.png", replace width(2000) height(1400)
+    keep if year == 2007
+    collapse (sum) share, by(newindcode industry_label)
+    gsort -share
+    keep if _n <= 5
+    levelsof newindcode, local(top5)
 restore
-// Robot Stock by Industry: Top3 by {&Delta}Robot Stock, 1995-2022 (KR)
 
-* --------------------------------------------------------
-* 그래프 2: 산업별 Δrobot stock vs Δemployment share (1995 -> 2022, 19개 산업)
-* -> "로봇이 많이 늘어난 산업일수록 고용비중이 더 많이 줄었는가" 상관관계
-* --------------------------------------------------------
-preserve
-    keep newindcode newind year robot_stock_raw emp_share rank
-    reshape wide robot_stock_raw emp_share, i(newindcode newind rank) j(year)
+gen is_top5 = 0
+foreach ind of local top5 {
+    replace is_top5 = 1 if newindcode == `ind'
+}
+gen group_label = industry_label
+replace group_label = "Other" if is_top5 == 0
 
-    gen delta_robot = (robot_stock_raw`maxyear' - robot_stock_raw`minyear') / 1000
-    gen delta_share = emp_share`maxyear' - emp_share`minyear'
+tempfile share_data
+save `share_data'
 
-    replace newind = strtrim(newind)
+**********************************************************************
+* 1) Slope chart: 2007 vs 2022 (전산업, op_stock 기준, log scale, KR/SG 각각 패널)
+*    -> op_stock+1에 로그 스케일을 적용해 0->양수 전환 산업도 표현
+*    -> 범례 대신 2022쪽 끝점에 산업명 라벨 표시 (겹치는 산업은 좌/우 번갈아 배치)
+**********************************************************************
+use `share_data', clear
+keep if inlist(year, 2007, 2022)
 
-    * Top-5 (robot stock 증가량 기준) 산업만 라벨링
-    gen lbl = newind if rank <= 5
+gen plot_stock = op_stock + 1
+gen xpos = (year == 2022)
 
-    * 상관관계 및 유의성 (단순회귀, n=19)
-    reg delta_share delta_robot
-    local b  : display %6.4f _b[delta_robot]
-    local df = e(df_r)
-    local t  = _b[delta_robot] / _se[delta_robot]
-    local p  : display %5.3f 2*ttail(`df', abs(`t'))
+* 짝수번째 산업: 2007 시작점 왼쪽에 라벨 / 홀수번째 산업: 2022 끝점 오른쪽에 라벨
+gen grp = mod(newindcode - 100, 2)
+gen vallabel = industry_label if (grp == 1 & year == 2022) | (grp == 0 & year == 2007)
 
-    quietly sum delta_share
-    local ytxt = r(max) - (r(max)-r(min))*0.05
-    quietly sum delta_robot
-    local xtxt = r(max) - (r(max)-r(min))*0.05
+levelsof newindcode, local(inds)
 
-    twoway (scatter delta_share delta_robot, mlabel(lbl) mlabposition(3) mlabsize(small) msize(small) mcolor(navy)) ///
-           (lfit delta_share delta_robot, lcolor(maroon) lwidth(medthick)), ///
-        title("", size(medium)) ///
-        ytitle("{&Delta} Employment Share", size(small) margin(r+3)) ///
-        xtitle("{&Delta} Robot Stock (thousands)", size(small)) ///
-        xscale(range(0 230)) ///
-        text(`ytxt' `xtxt' "coeff=`b'" "p-value=`p'", size(small) place(sw)) ///
+foreach c in kr sg {
+    local cname Korea
+    if "`c'" == "sg" local cname Singapore
+
+    local plotcmd ""
+    local i = 0
+    foreach ind of local inds {
+        local i = `i' + 1
+        local mlabpos = 3
+        if mod(`i', 2) == 0 local mlabpos = 9
+        local plotcmd `"`plotcmd' (connected plot_stock xpos if newindcode==`ind' & ctr=="`c'", msymbol(none) lwidth(medthin) mlabel(vallabel) mlabposition(`mlabpos') mlabsize(tiny) mlabgap(*1))"'
+    }
+
+    twoway `plotcmd', ///
+        xlabel(0 "2007" 1 "2022") xscale(range(-0.6 1.8)) ///
+        yscale(log) ylabel(1 10 100 1000 10000 100000, format(%9.0fc) angle(0)) ///
+        ytitle("Robot Stock (log scale)") xtitle("") ///
         legend(off) ///
-        graphregion(color(white)) plotregion(color(white)) ///
-        scheme(s2color)
+        title("`cname'") ///
+        ysize(6) xsize(8) ///
+        name(slope_`c', replace)
+    graph export "robot_stock_slope_2007_2022_`c'.pdf", replace name(slope_`c')
+}
+graph combine slope_kr slope_sg, rows(1) name(slope_combined, replace)
+graph export "robot_stock_slope_2007_2022.pdf", replace name(slope_combined)
 
-    graph export "scatter_robotstock_empshare.png", replace width(2000) height(1400)
-restore
-// {&Delta} Robot Stock vs. {&Delta} Employment Share" "(1995-2022, by industry, KR)
+**********************************************************************
+* 2) Heatmap: 산업 x 연도, op_stock 기준 (KR 위 / SG 아래, 전산업)
+*    -> heatplot 패키지 필요: ssc install heatplot (최초 1회만)
+**********************************************************************
+use `share_data', clear
+keep if year >= 2007 & year <= 2022
+encode industry_label, gen(ind_num)
+
+* Electronics가 압도적으로 커서 선형 스케일에서는 다른 산업이 모두 흐리게 보임 -> log 스케일 사용
+gen log_stock = log(op_stock + 1)
+
+foreach c in kr sg {
+    local cname Korea
+    if "`c'" == "sg" local cname Singapore
+
+    preserve
+        keep if ctr == "`c'"
+        heatplot log_stock i.year i.ind_num, ///
+            color(blues) ///
+            xlabel(, angle(45) labsize(small)) ///
+            ylabel(, labsize(vsmall) angle(0)) ///
+            title("`cname'") ///
+            legend(off) ///
+            name(heat_`c', replace)
+        graph export "robot_stock_heatmap_`c'.pdf", replace name(heat_`c')
+    restore
+}
+graph combine heat_kr heat_sg, cols(1) ysize(10) xsize(6) name(heat_combined, replace)
+graph export "robot_stock_heatmap_combined.pdf", replace name(heat_combined)
+

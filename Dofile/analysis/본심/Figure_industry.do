@@ -76,6 +76,8 @@ preserve
     name(emp_share_2005, replace)
 graph export "$output/figure/0607/emp_share_2005_korea_sg.pdf", replace name(emp_share_2005)
 
+
+	*twoway (scatter kr_share sg_share) (lfit kr_share sg_share)
     **************************************************************
     * Table (correlation 행 추가, tostring으로 문자형 변환 후)
     **************************************************************
